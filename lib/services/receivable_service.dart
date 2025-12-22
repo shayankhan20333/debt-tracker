@@ -20,6 +20,58 @@ class ReceivableService {
 
   factory ReceivableService() => _instance ?? ReceivableService._internal();
 
+  DateTime _parseCreatedAt(dynamic value, String id) {
+    if (value is firestore.Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
+    if (value is String) {
+      try {
+        return DateTime.parse(value);
+      } catch (_) {}
+    }
+    // try derive from numeric id
+    final parsedId = int.tryParse(id);
+    if (parsedId != null && parsedId > 1000000000000) {
+      return DateTime.fromMillisecondsSinceEpoch(parsedId);
+    }
+    return DateTime.now();
+  }
+
+  Stream<List<IsarReceivable>> watchReceivables() {
+    return firestore.FirebaseFirestore.instance
+        .collection('Receivables')
+        .snapshots()
+        .asyncMap((snapshot) async {
+      final Isar isar = await _localReceivableRepo.databaseInstance;
+      final mapped = snapshot.docs.map<IsarReceivable>((doc) {
+        final data = doc.data();
+        final participants = List<String>.from(data['participants'] ?? []);
+        final createdAt =
+            _parseCreatedAt(data['createdAt'], data["id"]?.toString() ?? '');
+        return IsarReceivable()
+          ..receivableId = data["id"]?.toString() ?? ''
+          ..participants = participants
+          ..description = data['description']?.toString() ?? 'No Description'
+          ..method = data['method']?.toString() ?? 'Unknown Method'
+          ..rate = List<double>.from(
+            data['rate']?.map((r) => (r as num).toDouble()) ?? [],
+          )
+          ..isReceived = List<bool>.from(
+            data['isReceived'] ?? List.filled(participants.length, false),
+          )
+          ..isPaid = List<bool>.from(
+            data['isPaid'] ?? List.filled(participants.length, false),
+          )
+          ..createdAt = createdAt;
+      }).toList();
+
+      await isar.writeTxn(() async {
+        await isar.isarReceivables.putAll(mapped);
+      });
+      return mapped;
+    });
+  }
+
   Future<ReceivableModel?> fetchReceivableById(String receivableId) async {
     final localReceivable = await _localReceivableRepo.getReceivables(
       receivableId,
@@ -42,96 +94,124 @@ class ReceivableService {
   }
 
   Future<void> createReceivable(ReceivableModel receivable) async {
-    await initializeDatabase();
-    await _remoteReceivableRepo.addReceivable(receivable);
-    await _localReceivableRepo.addReceivable(receivable);
+    try {
+      await initializeDatabase();
+      await _remoteReceivableRepo.addReceivable(receivable);
+      await _localReceivableRepo.addReceivable(receivable);
+      print('Receivable saved successfully: ${receivable.id}');
+    } catch (e) {
+      print('ERROR in createReceivable: $e');
+      rethrow;
+    }
   }
 
   Future<List<IsarReceivable>> fetchAllReceivables() async {
     await initializeDatabase();
-    Isar isarInstance = await _localReceivableRepo.databaseInstance;
+    try {
+      List<dynamic> firebasedata =
+          await _remoteReceivableRepo.receivablesLength();
 
-    List<dynamic> firebasedata = await _remoteReceivableRepo
-        .receivablesLength();
-    int isarcount = await _localReceivableRepo.receivablesLength();
+      if (firebasedata[0] > 0 && firebasedata[1].isNotEmpty) {
+        final Isar isar = await _localReceivableRepo.databaseInstance;
+        final receivables = firebasedata[1].map<IsarReceivable>((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final participants = List<String>.from(data['participants'] ?? []);
+          final createdAt =
+              _parseCreatedAt(data['createdAt'], data["id"]?.toString() ?? '');
+          return IsarReceivable()
+            ..receivableId = data["id"]?.toString() ?? ''
+            ..participants = participants
+            ..description = data['description']?.toString() ?? 'No Description'
+            ..method = data['method']?.toString() ?? 'Unknown Method'
+            ..rate = List<double>.from(
+              data['rate']?.map((r) => (r as num).toDouble()) ?? [],
+            )
+            ..isReceived = List<bool>.from(
+              data['isReceived'] ?? List.filled(participants.length, false),
+            )
+            ..isPaid = List<bool>.from(
+              data['isPaid'] ?? List.filled(participants.length, false),
+            )
+            ..createdAt = createdAt;
+        }).toList();
 
-    if (firebasedata[0] > isarcount) {
-      final existingIds = await isarInstance.isarReceivables
-          .where()
-          .receivableIdProperty()
-          .findAll();
-
-      final newReceivables = firebasedata[1]
-          .where((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            final docId = data["id"]?.toString() ?? '';
-            return !existingIds.contains(docId);
-          })
-          .map<IsarReceivable>((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            final participants = List<String>.from(data['participants'] ?? []);
-            return IsarReceivable()
-              ..receivableId = data["id"]?.toString() ?? ''
-              ..participants = participants
-              ..description =
-                  data['description']?.toString() ?? 'No Description'
-              ..method = data['method']?.toString() ?? 'Unknown Method'
-              ..rate = List<double>.from(
-                data['rate']?.map((r) => (r as num).toDouble()) ?? [],
-              )
-              ..isReceived = List<bool>.from(
-                data['isReceived'] ?? List.filled(participants.length, false),
-              )
-              ..isPaid = List<bool>.from(
-                data['isPaid'] ?? List.filled(participants.length, false),
-              )
-              ..createdAt = DateTime.now();
-          })
-          .toList();
-
-      if (newReceivables.isNotEmpty) {
-        await isarInstance.writeTxn(() async {
-          await isarInstance.isarReceivables.putAll(newReceivables);
+        await isar.writeTxn(() async {
+          await isar.isarReceivables.putAll(receivables);
         });
+        return await isar.isarReceivables.where().findAll();
       }
-    } else if (isarcount > firebasedata[0]) {
-      final firebaseIds = firebasedata[1].map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        return data["id"]?.toString() ?? '';
-      }).toList();
 
-      final localReceivables = await isarInstance.isarReceivables
+      return await (await _localReceivableRepo.databaseInstance)
+          .isarReceivables
           .where()
           .findAll();
-      final newLocalReceivables = localReceivables.where((receivable) {
-        return !firebaseIds.contains(receivable.receivableId);
-      }).toList();
-
-      for (var receivable in newLocalReceivables) {
-        final receivableModel = ReceivableModel(
-          id: int.parse(receivable.receivableId ?? '0'),
-          description: receivable.description ?? '',
-          participants: receivable.participants,
-          method: receivable.method ?? '',
-          rate: receivable.rate,
-          isReceived: receivable.isReceived,
-          isPaid: receivable.isPaid,
-          createdAt: firestore.Timestamp.fromDate(
-            receivable.createdAt ?? DateTime.now(),
-          ),
-        );
-        await _remoteReceivableRepo.addReceivable(receivableModel);
-      }
+    } catch (e) {
+      print('ERROR fetching receivables: $e');
+      return [];
     }
+  }
 
-    return await isarInstance.isarReceivables.where().findAll();
+  Future<void> _syncReceivables() async {
+    try {
+      final isar = await _localReceivableRepo.databaseInstance;
+
+      // Fallback to count-based sync
+      List<dynamic> firebasedata = await _remoteReceivableRepo
+          .receivablesLength();
+      int isarcount = await _localReceivableRepo.receivablesLength();
+
+      if (firebasedata[0] > isarcount) {
+        final existingIds = await isar.isarReceivables
+            .where()
+            .receivableIdProperty()
+            .findAll();
+
+        final newReceivables = firebasedata[1]
+            .where((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              final docId = data["id"]?.toString() ?? '';
+              return !existingIds.contains(docId);
+            })
+            .map<IsarReceivable>((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              final participants = List<String>.from(
+                data['participants'] ?? [],
+              );
+              return IsarReceivable()
+                ..receivableId = data["id"]?.toString() ?? ''
+                ..participants = participants
+                ..description =
+                    data['description']?.toString() ?? 'No Description'
+                ..method = data['method']?.toString() ?? 'Unknown Method'
+                ..rate = List<double>.from(
+                  data['rate']?.map((r) => (r as num).toDouble()) ?? [],
+                )
+                ..isReceived = List<bool>.from(
+                  data['isReceived'] ?? List.filled(participants.length, false),
+                )
+                ..isPaid = List<bool>.from(
+                  data['isPaid'] ?? List.filled(participants.length, false),
+                )
+                ..createdAt = DateTime.now();
+            })
+            .toList();
+
+        if (newReceivables.isNotEmpty) {
+          await isar.writeTxn(() async {
+            await isar.isarReceivables.putAll(newReceivables);
+          });
+        }
+      }
+    } catch (e) {
+      // Ignore sync errors
+    }
   }
 
   Future<void> updatePaymentStatus(String receivableId, String userId) async {
     await initializeDatabase();
-    Isar isarInstance = await _localReceivableRepo.databaseInstance;
+    final isar = await _localReceivableRepo.databaseInstance;
 
-    final receivable = await isarInstance.isarReceivables
+    final receivable = await isar.isarReceivables
         .filter()
         .receivableIdEqualTo(receivableId)
         .findFirst();
@@ -141,23 +221,41 @@ class ReceivableService {
       if (userIndex != -1) {
         final updatedPaidStatus = [...receivable.isPaid];
         updatedPaidStatus[userIndex] = true;
-        await _localReceivableRepo.updateReceivable(
-          receivableId,
-          updatedPaidStatus,
-        );
-        await _remoteReceivableRepo.updateReceivable(
-          receivableId,
-          updatedPaidStatus,
-        );
+
+        receivable.isPaid = updatedPaidStatus;
+
+        await isar.writeTxn(() async {
+          await isar.isarReceivables.put(receivable);
+
+          // Update sync status
+          try {
+            final status = IsarStatus()
+              ..lastTimeUpdatedFirebase = DateTime.now()
+              ..lastTimeUpdatedIsar = DateTime.now()
+              ..receivableId = receivableId;
+            await isar.isarStatuss.put(status);
+          } catch (e) {
+            // Ignore sync status errors
+          }
+        });
+
+        // Update Firebase directly
+        await firestore.FirebaseFirestore.instance
+            .collection('Receivables')
+            .doc(receivableId)
+            .update({
+              'isPaid': updatedPaidStatus,
+              'lastModified': firestore.Timestamp.now(),
+            });
       }
     }
   }
 
   Future<void> updateReceivedStatus(String receivableId, String userId) async {
     await initializeDatabase();
-    Isar isarInstance = await _localReceivableRepo.databaseInstance;
+    final isar = await _localReceivableRepo.databaseInstance;
 
-    final receivable = await isarInstance.isarReceivables
+    final receivable = await isar.isarReceivables
         .filter()
         .receivableIdEqualTo(receivableId)
         .findFirst();
@@ -170,16 +268,29 @@ class ReceivableService {
 
         receivable.isReceived = updatedReceivedStatus;
 
-        await isarInstance.writeTxn(() async {
-          await isarInstance.isarReceivables.put(receivable);
+        await isar.writeTxn(() async {
+          await isar.isarReceivables.put(receivable);
+
+          // Update sync status
+          try {
+            final status = IsarStatus()
+              ..lastTimeUpdatedFirebase = DateTime.now()
+              ..lastTimeUpdatedIsar = DateTime.now()
+              ..receivableId = receivableId;
+            await isar.isarStatuss.put(status);
+          } catch (e) {
+            // Ignore sync status errors
+          }
         });
 
-        final firebaseRepo =
-            _remoteReceivableRepo as FirebaseReceivableRepository;
-        await firebaseRepo.updateReceivableReceived(
-          receivableId,
-          updatedReceivedStatus,
-        );
+        // Update Firebase directly
+        await firestore.FirebaseFirestore.instance
+            .collection('Receivables')
+            .doc(receivableId)
+            .update({
+              'isReceived': updatedReceivedStatus,
+              'lastModified': firestore.Timestamp.now(),
+            });
       }
     }
   }
@@ -195,9 +306,9 @@ class ReceivableService {
     int userIndex,
   ) async {
     await initializeDatabase();
-    Isar isarInstance = await _localReceivableRepo.databaseInstance;
+    final isar = await _localReceivableRepo.databaseInstance;
 
-    final receivable = await isarInstance.isarReceivables
+    final receivable = await isar.isarReceivables
         .filter()
         .receivableIdEqualTo(receivableId)
         .findFirst();
@@ -215,17 +326,47 @@ class ReceivableService {
       }
       if (userIndex < updatedIsPaid.length) updatedIsPaid.removeAt(userIndex);
 
-      receivable.participants = updatedParticipants;
-      receivable.rate = updatedRates;
-      receivable.isReceived = updatedIsReceived;
-      receivable.isPaid = updatedIsPaid;
+      if (updatedParticipants.length <= 1) {
+        await isar.writeTxn(() async {
+          await isar.isarReceivables.delete(receivable.id);
+        });
+        await firestore.FirebaseFirestore.instance
+            .collection('Receivables')
+            .doc(receivableId)
+            .delete();
+      } else {
+        receivable.participants = updatedParticipants;
+        receivable.rate = updatedRates;
+        receivable.isReceived = updatedIsReceived;
+        receivable.isPaid = updatedIsPaid;
 
-      await isarInstance.writeTxn(() async {
-        await isarInstance.isarReceivables.put(receivable);
-      });
+        await isar.writeTxn(() async {
+          await isar.isarReceivables.put(receivable);
 
-      // Update Firebase as well
-      await _remoteReceivableRepo.updateReceivable(receivableId, updatedIsPaid);
+          // Update sync status
+          try {
+            final status = IsarStatus()
+              ..lastTimeUpdatedFirebase = DateTime.now()
+              ..lastTimeUpdatedIsar = DateTime.now()
+              ..receivableId = receivableId;
+            await isar.isarStatuss.put(status);
+          } catch (e) {
+            // Ignore sync status errors
+          }
+        });
+
+        // Update Firebase directly
+        await firestore.FirebaseFirestore.instance
+            .collection('Receivables')
+            .doc(receivableId)
+            .update({
+              'participants': updatedParticipants,
+              'rate': updatedRates,
+              'isReceived': updatedIsReceived,
+              'isPaid': updatedIsPaid,
+              'lastModified': firestore.Timestamp.now(),
+            });
+      }
     }
   }
 }

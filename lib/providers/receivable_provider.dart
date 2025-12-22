@@ -2,10 +2,12 @@ import 'package:depth_tracker/DataBase/isar/isar_collections/isar_collections.da
 import 'package:depth_tracker/model/receivable_model.dart';
 import 'package:depth_tracker/services/receivable_service.dart';
 import 'package:flutter/material.dart';
+import 'dart:async';
 
 class ReceivableProvider with ChangeNotifier {
   late List<IsarReceivable> _receivables = [];
   late ReceivableService _receivableService;
+  StreamSubscription<List<IsarReceivable>>? _subscription;
 
   ReceivableProvider() {
     _receivableService = ReceivableService();
@@ -33,6 +35,20 @@ class ReceivableProvider with ChangeNotifier {
     } catch (e) {
       return [];
     }
+  }
+  
+  Stream<List<IsarReceivable>> watchReceivables() {
+    return _receivableService.watchReceivables();
+  }
+  
+  void startListening() {
+    _subscription?.cancel();
+    _subscription = _receivableService.watchReceivables().listen(
+      (receivables) {
+        _receivables = receivables;
+        notifyListeners();
+      },
+    );
   }
 
   Future<void> updatePaymentStatus({
@@ -72,5 +88,11 @@ class ReceivableProvider with ChangeNotifier {
     await _receivableService.removeUserFromReceivable(receivableId, userIndex);
     if (!context.mounted) return;
     await getAllReceivables(context: context);
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
   }
 }

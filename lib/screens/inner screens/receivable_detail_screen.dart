@@ -22,6 +22,8 @@ class ReceivableDetailScreen extends StatefulWidget {
 }
 
 class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
+  bool _isProcessing = false;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -29,30 +31,43 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
         title: "${widget.userName}'s Receivables",
         hasTitleDecoration: true,
       ),
-      body: Consumer<ReceivableProvider>(
-        builder: (context, provider, child) {
-          final receivableIds = widget.receivables
-              .map((r) => r.receivableId ?? '')
-              .toList();
-          final allReceivables = provider.getReceivables
-              .where((r) => receivableIds.contains(r.receivableId ?? ''))
-              .toList();
+      body: Stack(
+        children: [
+          Consumer<ReceivableProvider>(
+            builder: (context, provider, child) {
+              final receivableIds = widget.receivables
+                  .map((r) => r.receivableId ?? '')
+                  .toList();
+              final allReceivables = provider.getReceivables
+                  .where((r) => receivableIds.contains(r.receivableId ?? ''))
+                  .toList();
 
-          return FutureBuilder<List<IsarReceivable>>(
-            future: _filterAndSortReceivables(allReceivables),
-            builder: (context, snapshot) {
-              final sortedReceivables = snapshot.data ?? [];
+              return FutureBuilder<List<IsarReceivable>>(
+                future: _filterAndSortReceivables(allReceivables),
+                builder: (context, snapshot) {
+                  final sortedReceivables = snapshot.data ?? [];
 
-              return ListView.builder(
-                padding: EdgeInsets.all(16),
-                itemCount: sortedReceivables.length,
-                itemBuilder: (context, index) {
-                  return receivableCard(sortedReceivables[index]);
+                  if (sortedReceivables.isEmpty) {
+                    return Center(child: TitleText(title: "No Receivables"));
+                  }
+
+                  return ListView.builder(
+                    padding: EdgeInsets.all(16),
+                    itemCount: sortedReceivables.length,
+                    itemBuilder: (context, index) {
+                      return receivableCard(sortedReceivables[index]);
+                    },
+                  );
                 },
               );
             },
-          );
-        },
+          ),
+          if (_isProcessing)
+            Container(
+              color: const Color.fromARGB(80, 0, 0, 0),
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+        ],
       ),
     );
   }
@@ -131,7 +146,10 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
                 children: [
                   Icon(Icons.payment, color: Colors.purple, size: 18),
                   SizedBox(width: 8),
-                  SubtitleText(title: receivable.method ?? 'Unknown Method', fontSize: 14),
+                  SubtitleText(
+                    title: receivable.method ?? 'Unknown Method',
+                    fontSize: 14,
+                  ),
                 ],
               ),
               SizedBox(height: 8),
@@ -143,6 +161,7 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
                 builder: (context, snapshot) {
                   final status =
                       snapshot.data ?? {'isReceived': false, 'isPaid': false};
+                  final settled = status['isReceived']! && status['isPaid']!;
                   return Column(
                     children: [
                       Row(
@@ -174,6 +193,12 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
                           ),
                         ],
                       ),
+                      SizedBox(height: 4),
+                      SubtitleText(
+                        title: settled ? 'Settled' : 'Outstanding',
+                        fontSize: 12,
+                        color: settled ? Colors.green : Colors.orange,
+                      ),
                     ],
                   );
                 },
@@ -183,7 +208,8 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   ElevatedButton.icon(
-                    onPressed: () => _deleteReceivable(receivable),
+                    onPressed:
+                        _isProcessing ? null : () => _deleteReceivable(receivable),
                     icon: Icon(Icons.delete, size: 16),
                     label: Text('Delete'),
                     style: ElevatedButton.styleFrom(
@@ -195,19 +221,24 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
                       ),
                     ),
                   ),
-                  FutureBuilder<bool>(
+                  FutureBuilder<Map<String, bool>>(
                     key: ValueKey(
                       '${receivable.receivableId ?? ''}_${receivable.isReceived}',
                     ),
                     future: _getUserPaymentStatus(receivable),
                     builder: (context, snapshot) {
-                      final isPaid = snapshot.data ?? false;
-                      if (isPaid) return SizedBox.shrink();
+                      final statuses = snapshot.data ??
+                          const {'isPaid': false, 'isReceived': false};
+                      final settled =
+                          statuses['isPaid']! && statuses['isReceived']!;
+                      if (settled) return SizedBox.shrink();
                       return Row(
                         children: [
                           SizedBox(width: 8),
                           ElevatedButton.icon(
-                            onPressed: () => _markAsPaid(receivable),
+                            onPressed: _isProcessing
+                                ? null
+                                : () => _markAsPaid(receivable),
                             icon: Icon(Icons.payment, size: 16),
                             label: Text('Receive'),
                             style: ElevatedButton.styleFrom(
@@ -236,8 +267,8 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Remove User'),
-        content: Text('Remove ${widget.userName} from this receivable?'),
+        title: Text('Delete Receivable'),
+        content: Text('Delete this receivable?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -245,41 +276,67 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text('Remove', style: TextStyle(color: Colors.red)),
+            child: Text('Delete', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
 
     if (confirmed == true) {
-      await _removeUserFromReceivable(receivable);
+      setState(() {
+        _isProcessing = true;
+      });
+      final provider = Provider.of<ReceivableProvider>(context, listen: false);
+      await provider.deleteReceivable(
+        context: context,
+        receivableId: receivable.receivableId ?? '',
+      );
+      if (mounted) {
+        Navigator.pop(context);
+      }
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     }
   }
 
   Future<void> _markAsPaid(IsarReceivable receivable) async {
-    // The creator (current user) is marking as received
-    final creatorUserId = receivable.participants.first;
-
+    setState(() {
+      _isProcessing = true;
+    });
     final provider = Provider.of<ReceivableProvider>(context, listen: false);
-    await provider.updateReceivedStatus(
-      context: context,
-      receivableId: receivable.receivableId ?? '',
-      userId: creatorUserId,
-    );
+    final debtorIndex = await _findUserIndex(receivable);
+    if (debtorIndex != null && debtorIndex < receivable.participants.length) {
+      final debtorId = receivable.participants[debtorIndex];
+      await provider.updateReceivedStatus(
+        context: context,
+        receivableId: receivable.receivableId ?? '',
+        userId: debtorId,
+      );
+    }
+    if (mounted) {
+      setState(() {
+        _isProcessing = false;
+      });
+    }
   }
 
-  Future<bool> _getUserPaymentStatus(IsarReceivable receivable) async {
-    for (int i = 0; i < receivable.participants.length; i++) {
-      final userId = receivable.participants[i];
-      final userService = UserService();
-      final user = await userService.fetchUserById(userId);
-      if (user?.userName == widget.userName) {
-        return i < receivable.isReceived.length
-            ? receivable.isReceived[i]
-            : false;
-      }
+  Future<Map<String, bool>> _getUserPaymentStatus(
+    IsarReceivable receivable,
+  ) async {
+    final idx = await _findUserIndex(receivable);
+    if (idx != null) {
+      final paid = idx < receivable.isPaid.length
+          ? receivable.isPaid[idx]
+          : false;
+      final received = idx < receivable.isReceived.length
+          ? receivable.isReceived[idx]
+          : false;
+      return {'isPaid': paid, 'isReceived': received};
     }
-    return false;
+    return {'isPaid': false, 'isReceived': false};
   }
 
   Future<List<IsarReceivable>> _filterAndSortReceivables(
@@ -291,8 +348,9 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
       // Check if user is still a participant with an amount > 0
       final userAmount = await _getUserAmount(receivable);
       if (userAmount > 0) {
-        final isPaid = await _getUserPaymentStatus(receivable);
-        receivablesWithStatus.add(MapEntry(receivable, isPaid));
+        final status = await _getUserPaymentStatus(receivable);
+        final settled = status['isPaid']! && status['isReceived']!;
+        receivablesWithStatus.add(MapEntry(receivable, settled));
       }
     }
 
@@ -302,7 +360,9 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
       if (!a.value && b.value) return -1;
 
       // Then sort by date/time (newest first)
-      return (b.key.createdAt ?? DateTime.now()).compareTo(a.key.createdAt ?? DateTime.now());
+      return (b.key.createdAt ?? DateTime.now()).compareTo(
+        a.key.createdAt ?? DateTime.now(),
+      );
     });
 
     return receivablesWithStatus.map((entry) => entry.key).toList();
@@ -320,51 +380,25 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
     return 0.0;
   }
 
-  Future<void> _removeUserFromReceivable(IsarReceivable receivable) async {
-    // Find the user index
-    int userIndex = -1;
+  Future<int?> _findUserIndex(IsarReceivable receivable) async {
     for (int i = 0; i < receivable.participants.length; i++) {
       final userId = receivable.participants[i];
       final userService = UserService();
       final user = await userService.fetchUserById(userId);
       if (user?.userName == widget.userName) {
-        userIndex = i;
-        break;
+        return i;
       }
     }
-
-    if (userIndex != -1) {
-      if (!mounted) return;
-      final provider = Provider.of<ReceivableProvider>(context, listen: false);
-      await provider.removeUserFromReceivable(
-        context: context,
-        receivableId: receivable.receivableId ?? '',
-        userIndex: userIndex,
-      );
-    }
+    return null;
   }
 
   Future<Map<String, bool>> _getReceivableStatus(
     IsarReceivable receivable,
   ) async {
-    // Find current user (creator) index - should be 0
-    final creatorIndex = 0;
-
-    // Find the specific user index
-    int userIndex = -1;
-    for (int i = 0; i < receivable.participants.length; i++) {
-      final userId = receivable.participants[i];
-      final userService = UserService();
-      final user = await userService.fetchUserById(userId);
-      if (user?.userName == widget.userName) {
-        userIndex = i;
-        break;
-      }
-    }
-
-    if (userIndex != -1) {
-      final isReceived = creatorIndex < receivable.isReceived.length
-          ? receivable.isReceived[creatorIndex]
+    final userIndex = await _findUserIndex(receivable);
+    if (userIndex != null) {
+      final isReceived = userIndex < receivable.isReceived.length
+          ? receivable.isReceived[userIndex]
           : false;
       final isPaid = userIndex < receivable.isPaid.length
           ? receivable.isPaid[userIndex]

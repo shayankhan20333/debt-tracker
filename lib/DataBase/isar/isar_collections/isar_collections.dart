@@ -1,5 +1,7 @@
 import 'package:isar/isar.dart';
 
+// dart run build_runner build --delete-conflicting-outputs
+
 part 'isar_collections.g.dart';
 
 @collection
@@ -37,4 +39,12 @@ class IsarReceivable {
   List<bool> isReceived = [];
   List<bool> isPaid = [];
   DateTime? createdAt;
+}
+
+@collection
+class IsarStatus {
+  Id id = Isar.autoIncrement;
+  DateTime? lastTimeUpdatedFirebase;
+  DateTime? lastTimeUpdatedIsar;
+  String? receivableId;
 }

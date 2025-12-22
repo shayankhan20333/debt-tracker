@@ -7,7 +7,6 @@ import 'package:depth_tracker/model/user_model.dart';
 import 'package:depth_tracker/root_screen.dart';
 import 'package:depth_tracker/screens/loading_manager.dart';
 import 'package:depth_tracker/services/user_services.dart';
-import 'package:depth_tracker/widgets/my_app_function.dart';
 import 'package:depth_tracker/widgets/subtitle_text.dart';
 import 'package:depth_tracker/widgets/title_text.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -41,6 +40,30 @@ class _RegisterScreenState extends State<RegisterScreen> {
   late FocusNode _passwordRepeatFocusNode;
 
   late GlobalKey<FormState> _formkey;
+
+  void _showSnack(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red : null,
+      ),
+    );
+  }
+
+  String _mapAuthError(String code) {
+    switch (code) {
+      case 'email-already-in-use':
+        return 'Email already in use. Try logging in.';
+      case 'invalid-email':
+        return 'Please enter a valid email.';
+      case 'weak-password':
+        return 'Password must be at least 8 characters.';
+      case 'network-request-failed':
+        return 'Network error. Check your connection.';
+      default:
+        return 'Sign up failed. Please try again.';
+    }
+  }
 
   bool _obscurePasswordFirst = false;
   bool _obscurePasswordSecond = false;
@@ -100,20 +123,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _loginFunction() async {
-    late bool isvalid = _formkey.currentState!.validate();
+    if (isLoading) return;
+    final bool isvalid = _formkey.currentState!.validate();
     FocusScope.of(context).unfocus();
 
     if (_imagePicked == null) {
-      MyAppFunction.showErrorAndAlertDialog(
-        context: context,
-        description: "Please upload a picture",
-        fucntionBtnName: "Ok",
-        function: () {
-          if (Navigator.canPop(context)) {
-            Navigator.pop(context);
-          }
-        },
-      );
+      _showSnack("Please upload a picture", isError: true);
       return;
     }
 
@@ -166,40 +181,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
           fontSize: 16.0,
         );
         if (!mounted) return;
-        Navigator.pushReplacementNamed(context, RootScreen.routeName);
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          RootScreen.routeName,
+          (route) => false,
+        );
+      } on FirebaseAuthException catch (error) {
+        _showSnack(_mapAuthError(error.code), isError: true);
       } on FirebaseException catch (error) {
-        await MyAppFunction.showErrorAndAlertDialog(
-          context: context,
-          fucntionBtnName: 'Ok',
-          description: error.message.toString(),
-          function: () {
-            if (Navigator.canPop(context)) {
-              Navigator.pop(context);
-            }
-          },
-        );
+        _showSnack(error.message.toString(), isError: true);
       } on IsarError catch (error) {
-        await MyAppFunction.showErrorAndAlertDialog(
-          context: context,
-          fucntionBtnName: 'Ok',
-          description: error.message.toString(),
-          function: () {
-            if (Navigator.canPop(context)) {
-              Navigator.pop(context);
-            }
-          },
-        );
+        _showSnack(error.message.toString(), isError: true);
       } catch (error) {
-        await MyAppFunction.showErrorAndAlertDialog(
-          context: context,
-          fucntionBtnName: 'Ok',
-          description: error.toString(),
-          function: () {
-            if (Navigator.canPop(context)) {
-              Navigator.pop(context);
-            }
-          },
-        );
+        _showSnack(error.toString(), isError: true);
       } finally {
         setState(() {
           isLoading = false;
@@ -430,15 +424,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                   ElevatedButton.icon(
                     icon: Icon(Icons.login),
-                    onPressed: () async {
-                      setState(() {
-                        isLoading = true;
-                      });
-                      await _loginFunction();
-                      setState(() {
-                        isLoading = false;
-                      });
-                    },
+                    onPressed: isLoading
+                        ? null
+                        : () async {
+                            await _loginFunction();
+                          },
                     style: ElevatedButton.styleFrom(
                       minimumSize: Size(double.infinity, 50),
                     ),

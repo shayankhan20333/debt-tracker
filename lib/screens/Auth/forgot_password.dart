@@ -4,7 +4,6 @@ import 'package:depth_tracker/screens/Auth/login_screen.dart';
 import 'package:depth_tracker/screens/loading_manager.dart';
 import 'package:depth_tracker/services/assets_manager.dart';
 import 'package:depth_tracker/widgets/app_name_text.dart';
-import 'package:depth_tracker/widgets/my_app_function.dart';
 import 'package:depth_tracker/widgets/subtitle_text.dart';
 import 'package:depth_tracker/widgets/title_text.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -30,6 +29,19 @@ class _ForgotPasswordState extends State<ForgotPassword> {
 
   late FirebaseAuthService firebaseUser;
 
+  String _mapAuthError(String code) {
+    switch (code) {
+      case 'user-not-found':
+        return 'No account found for that email.';
+      case 'invalid-email':
+        return 'Please enter a valid email.';
+      case 'network-request-failed':
+        return 'Network error. Check your connection.';
+      default:
+        return 'Could not send reset email. Try again.';
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -48,11 +60,15 @@ class _ForgotPasswordState extends State<ForgotPassword> {
   }
 
   Future<void> _resetFunction() async {
-    late bool isvalid = _formkey.currentState!.validate();
+    if (isLoading) return;
+    final bool isvalid = _formkey.currentState!.validate();
     FocusScope.of(context).unfocus();
 
     if (isvalid) {
       try {
+        setState(() {
+          isLoading = true;
+        });
         await firebaseUser.sendPasswordReset(_emailController.text.trim());
 
         Fluttertoast.showToast(
@@ -73,29 +89,29 @@ class _ForgotPasswordState extends State<ForgotPassword> {
           },
         );
       } on FirebaseAuthException catch (error) {
-        if (!mounted) return;
-        MyAppFunction.showErrorAndAlertDialog(
-          context: context,
-          description: error.code.toString(),
-          fucntionBtnName: "cancel",
-          function: () {
-            if (Navigator.canPop(context)) {
-              Navigator.pop(context);
-            }
-          },
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(_mapAuthError(error.code)),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       } catch (error) {
-        if (!mounted) return;
-        MyAppFunction.showErrorAndAlertDialog(
-          context: context,
-          description: error.toString(),
-          fucntionBtnName: "cancel",
-          function: () {
-            if (Navigator.canPop(context)) {
-              Navigator.pop(context);
-            }
-          },
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(error.toString()),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            isLoading = false;
+          });
+        }
       }
     }
   }
@@ -154,13 +170,7 @@ class _ForgotPasswordState extends State<ForgotPassword> {
                               ),
                             ),
                             onFieldSubmitted: (value) async {
-                              setState(() {
-                                isLoading = true;
-                              });
                               await _resetFunction();
-                              setState(() {
-                                isLoading = false;
-                              });
                             },
                             validator: (value) {
                               return MyValidators.emailValidator(value);
@@ -168,12 +178,7 @@ class _ForgotPasswordState extends State<ForgotPassword> {
                           ),
                           ElevatedButton.icon(
                             icon: Icon(IconlyBold.send),
-                            onPressed: () async {
-                              setState(() {
-                                isLoading = true;
-                              });
-                              await _resetFunction();
-                            },
+                            onPressed: isLoading ? null : () async => _resetFunction(),
                             style: ElevatedButton.styleFrom(
                               minimumSize: Size(double.infinity, 50),
                             ),

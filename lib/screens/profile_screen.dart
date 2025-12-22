@@ -185,6 +185,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               TextButton(
                                 onPressed: () async {
                                   final authService = FirebaseAuthService();
+                                  await UserService().clearLocalCache();
                                   await authService.signOut();
                                   if (!mounted) return;
                                   Navigator.pushNamedAndRemoveUntil(

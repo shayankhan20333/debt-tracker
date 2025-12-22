@@ -1,8 +1,10 @@
+import 'package:cloud_firestore/cloud_firestore.dart' as firestore;
 import 'package:depth_tracker/DataBase/database_abstract_classes.dart';
 import 'package:depth_tracker/DataBase/firebase/firebase_low_level_classes.dart';
 import 'package:depth_tracker/DataBase/isar/isar_collections/isar_collections.dart';
 import 'package:depth_tracker/DataBase/isar/isar_low_level_implementation.dart';
 import 'package:depth_tracker/model/user_model.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:isar/isar.dart';
 
 class UserService {
@@ -18,6 +20,36 @@ class UserService {
   }
 
   factory UserService() => _instance ?? UserService._internal();
+
+  Future<UserModel?> ensureUserProfile(User firebaseUser) async {
+    final existing = await fetchUserById(firebaseUser.uid);
+    if (existing != null) return existing;
+
+    final newUser = UserModel(
+      userId: firebaseUser.uid,
+      userName: firebaseUser.displayName ?? "Unknown",
+      userEmail: firebaseUser.email ?? "Email Unknown",
+      userContact: firebaseUser.phoneNumber ?? "Contact Unknown",
+      userImagePath: firebaseUser.photoURL ?? "",
+      createdAt: firestore.Timestamp.now(),
+    );
+    await createUser(newUser);
+    return newUser;
+  }
+
+  Future<void> cacheUserLocally(UserModel user) async {
+    await _localUserRepo.addUser(user);
+  }
+
+  Future<void> clearLocalCache() async {
+    final isar = await _localUserRepo.databaseInstance;
+    await isar.writeTxn(() async {
+      await isar.isarUserProfiles.clear();
+      await isar.isarReceivables.clear();
+      await isar.isarLoans.clear();
+      await isar.isarStatuss.clear();
+    });
+  }
 
   Future<UserModel?> fetchUserById(String userId) async {
     final localUser = await _localUserRepo.getUser(userId);

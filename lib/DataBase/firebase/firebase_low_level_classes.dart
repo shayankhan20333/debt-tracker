@@ -164,6 +164,11 @@ class FirebaseReceivableRepository implements IReceivableRepository {
     return _firebaseApp!;
   }
 
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> getModifiedReceivables(Timestamp lastSync) async {
+    final snapshot = await _db.where('lastModified', isGreaterThan: lastSync).get();
+    return snapshot.docs;
+  }
+
   @override
   Future<List<dynamic>> receivablesLength() async {
     final snapshot = await _db.get();
@@ -182,6 +187,7 @@ class FirebaseReceivableRepository implements IReceivableRepository {
       "isReceived": receivable.isReceived,
       "isPaid": receivable.isPaid,
       "createdAt": Timestamp.now(),
+      "lastModified": Timestamp.now(),
     });
   }
 
@@ -212,14 +218,20 @@ class FirebaseReceivableRepository implements IReceivableRepository {
 
   @override
   Future<void> updateReceivable(String receivableId, List<bool> isPaid) async {
-    await _db.doc(receivableId).update({"isPaid": isPaid});
+    await _db.doc(receivableId).update({
+      "isPaid": isPaid,
+      "lastModified": Timestamp.now(),
+    });
   }
 
   Future<void> updateReceivableReceived(
     String receivableId,
     List<bool> isReceived,
   ) async {
-    await _db.doc(receivableId).update({"isReceived": isReceived});
+    await _db.doc(receivableId).update({
+      "isReceived": isReceived,
+      "lastModified": Timestamp.now(),
+    });
   }
 
   @override
@@ -262,37 +274,39 @@ class FirebaseAuthService implements IAuthService {
 
   @override
   Future<String> signInWithGoogle() async {
-    final googleSignIn = GoogleSignIn(
-      scopes: ['email', 'https://www.googleapis.com/auth/contacts.readonly'],
-      serverClientId:
-          "292012661595-brlt3olikkpql73t49kr3ienkv2p9mea.apps.googleusercontent.com",
-    );
-    // await googleSignIn.disconnect();
-    final googleUser = await googleSignIn.signIn();
+    try {
+      final googleSignIn = GoogleSignIn(
+        scopes: ['email'],
+      );
+      
+      await googleSignIn.signOut();
+      final googleUser = await googleSignIn.signIn();
 
-    if (googleUser == null) {
-      return "Login cancelled";
-    }
+      if (googleUser == null) {
+        return "Login cancelled";
+      }
 
-    final googleAuth = await googleUser.authentication;
-    late UserCredential credential;
+      final googleAuth = await googleUser.authentication;
 
-    if (googleAuth.accessToken != null && googleAuth.idToken != null) {
-      credential = await _auth.signInWithCredential(
+      if (googleAuth.accessToken == null || googleAuth.idToken == null) {
+        return "Google sign-in failed: Missing tokens";
+      }
+
+      final credential = await _auth.signInWithCredential(
         GoogleAuthProvider.credential(
           accessToken: googleAuth.accessToken,
           idToken: googleAuth.idToken,
         ),
       );
-    } else {
-      return "Google sign-in failed: Missing tokens";
-    }
 
-    if (credential.additionalUserInfo!.isNewUser) {
-      return "new user";
-    }
+      if (credential.additionalUserInfo?.isNewUser == true) {
+        return "new user";
+      }
 
-    return "old user";
+      return "old user";
+    } catch (e) {
+      return "Google sign-in failed: ${e.toString()}";
+    }
   }
 
   @override

@@ -7,16 +7,32 @@ import 'package:depth_tracker/model/user_model.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 
+class IsarService {
+  static Isar? _isar;
+  
+  static Future<Isar> getInstance() async {
+    if (_isar != null && _isar!.isOpen) {
+      return _isar!;
+    }
+    
+    final dir = await getApplicationDocumentsDirectory();
+    _isar = await Isar.open([
+      IsarUserProfileSchema,
+      IsarLoanSchema,
+      IsarReceivableSchema,
+      IsarStatusSchema,
+    ], directory: dir.path);
+    
+    return _isar!;
+  }
+}
+
 class IsarUserRepository implements IUserRepository {
   static IsarUserRepository? _instance;
-  static Isar? _isar;
 
   @override
   Future<Isar> get databaseInstance async {
-    if (_isar == null || !_isar!.isOpen) {
-      await initializeDatabase();
-    }
-    return _isar!;
+    return await IsarService.getInstance();
   }
 
   IsarUserRepository._internal();
@@ -27,22 +43,12 @@ class IsarUserRepository implements IUserRepository {
 
   @override
   Future<Isar> initializeDatabase() async {
-    if (_isar != null && _isar!.isOpen) {
-      return _isar!;
-    }
-
-    final dir = await getApplicationDocumentsDirectory();
-    _isar = await Isar.open([
-      IsarUserProfileSchema,
-      IsarLoanSchema,
-      IsarReceivableSchema,
-    ], directory: dir.path);
-
-    return _isar!;
+    return await IsarService.getInstance();
   }
 
   @override
   Future<void> addUser(UserModel user) async {
+    final isar = await IsarService.getInstance();
     final isarUser = IsarUserProfile()
       ..userId = user.userId
       ..userName = user.userName
@@ -51,19 +57,21 @@ class IsarUserRepository implements IUserRepository {
       ..userImagePath = user.userImagePath
       ..createdAt = user.createdAt.toDate();
 
-    await _isar!.writeTxn(() async {
-      await _isar!.isarUserProfiles.put(isarUser);
+    await isar.writeTxn(() async {
+      await isar.isarUserProfiles.put(isarUser);
     });
   }
 
   @override
   Future<int> usersLength() async {
-    return await _isar!.isarUserProfiles.count();
+    final isar = await IsarService.getInstance();
+    return await isar.isarUserProfiles.count();
   }
 
   @override
   Future<UserModel?> getUser(String userId) async {
-    final isarUser = await _isar!.isarUserProfiles
+    final isar = await IsarService.getInstance();
+    final isarUser = await isar.isarUserProfiles
         .filter()
         .userIdEqualTo(userId)
         .findFirst();
@@ -83,21 +91,18 @@ class IsarUserRepository implements IUserRepository {
   }
 
   Future<List<String>> getOtherUser() async {
-    final isarUsers = await _isar!.isarUserProfiles.where().findAll();
+    final isar = await IsarService.getInstance();
+    final isarUsers = await isar.isarUserProfiles.where().findAll();
     return isarUsers.map((user) => user.userName ?? '').toList();
   }
 }
 
 class IsarLoanRepository implements ILoanRepository {
   static IsarLoanRepository? _instance;
-  static Isar? _isar;
 
   @override
   Future<Isar> get databaseInstance async {
-    if (_isar == null || !_isar!.isOpen) {
-      await initializeDatabase();
-    }
-    return _isar!;
+    return await IsarService.getInstance();
   }
 
   IsarLoanRepository._internal();
@@ -108,25 +113,18 @@ class IsarLoanRepository implements ILoanRepository {
 
   @override
   Future<Isar> initializeDatabase() async {
-    if (_isar != null && _isar!.isOpen) {
-      return _isar!;
-    }
-    final dir = await getApplicationDocumentsDirectory();
-    _isar = await Isar.open([
-      IsarUserProfileSchema,
-      IsarLoanSchema,
-      IsarReceivableSchema,
-    ], directory: dir.path);
-    return _isar!;
+    return await IsarService.getInstance();
   }
 
   @override
   Future<int> loanLength() async {
-    return await _isar!.isarLoans.count();
+    final isar = await IsarService.getInstance();
+    return await isar.isarLoans.count();
   }
 
   @override
   Future<void> addLoan(LoanModel loan) async {
+    final isar = await IsarService.getInstance();
     final isarLoan = IsarLoan()
       ..loanId = loan.id.toString()
       ..userId = loan.userId
@@ -134,14 +132,15 @@ class IsarLoanRepository implements ILoanRepository {
       ..rate = loan.rate
       ..createdAt = loan.createdAt.toDate();
 
-    await _isar!.writeTxn(() async {
-      await _isar!.isarLoans.put(isarLoan);
+    await isar.writeTxn(() async {
+      await isar.isarLoans.put(isarLoan);
     });
   }
 
   @override
   Future<List<LoanModel>> getLoans(String userId) async {
-    final isarLoans = await _isar!.isarLoans
+    final isar = await IsarService.getInstance();
+    final isarLoans = await isar.isarLoans
         .filter()
         .userIdEqualTo(userId)
         .findAll();
@@ -166,14 +165,10 @@ class IsarLoanRepository implements ILoanRepository {
 
 class IsarReceivableRepository implements IReceivableRepository {
   static IsarReceivableRepository? _instance;
-  static Isar? _isar;
 
   @override
   Future<Isar> get databaseInstance async {
-    if (_isar == null || !_isar!.isOpen) {
-      await initializeDatabase();
-    }
-    return _isar!;
+    return await IsarService.getInstance();
   }
 
   IsarReceivableRepository._internal();
@@ -184,25 +179,18 @@ class IsarReceivableRepository implements IReceivableRepository {
 
   @override
   Future<Isar> initializeDatabase() async {
-    if (_isar != null && _isar!.isOpen) {
-      return _isar!;
-    }
-    final dir = await getApplicationDocumentsDirectory();
-    _isar = await Isar.open([
-      IsarUserProfileSchema,
-      IsarLoanSchema,
-      IsarReceivableSchema,
-    ], directory: dir.path);
-    return _isar!;
+    return await IsarService.getInstance();
   }
 
   @override
   Future<int> receivablesLength() async {
-    return await _isar!.isarReceivables.count();
+    final isar = await IsarService.getInstance();
+    return await isar.isarReceivables.count();
   }
 
   @override
   Future<void> addReceivable(ReceivableModel receivable) async {
+    final isar = await IsarService.getInstance();
     final isarReceivable = IsarReceivable()
       ..receivableId = receivable.id.toString()
       ..participants = receivable.participants
@@ -213,14 +201,15 @@ class IsarReceivableRepository implements IReceivableRepository {
       ..isPaid = receivable.isPaid
       ..createdAt = receivable.createdAt.toDate();
 
-    await _isar!.writeTxn(() async {
-      await _isar!.isarReceivables.put(isarReceivable);
+    await isar.writeTxn(() async {
+      await isar.isarReceivables.put(isarReceivable);
     });
   }
 
   @override
   Future<List<ReceivableModel>> getReceivables(String userId) async {
-    final isarReceivables = await _isar!.isarReceivables.where().findAll();
+    final isar = await IsarService.getInstance();
+    final isarReceivables = await isar.isarReceivables.where().findAll();
 
     return isarReceivables
         .map(
@@ -242,7 +231,8 @@ class IsarReceivableRepository implements IReceivableRepository {
 
   @override
   Future<void> updateReceivable(String receivableId, List<bool> isPaid) async {
-    final receivable = await _isar!.isarReceivables
+    final isar = await IsarService.getInstance();
+    final receivable = await isar.isarReceivables
         .filter()
         .receivableIdEqualTo(receivableId)
         .findFirst();
@@ -250,22 +240,23 @@ class IsarReceivableRepository implements IReceivableRepository {
     if (receivable != null) {
       receivable.isPaid = isPaid;
 
-      await _isar!.writeTxn(() async {
-        await _isar!.isarReceivables.put(receivable);
+      await isar.writeTxn(() async {
+        await isar.isarReceivables.put(receivable);
       });
     }
   }
 
   @override
   Future<void> deleteReceivable(String receivableId) async {
-    final receivable = await _isar!.isarReceivables
+    final isar = await IsarService.getInstance();
+    final receivable = await isar.isarReceivables
         .filter()
         .receivableIdEqualTo(receivableId)
         .findFirst();
 
     if (receivable != null) {
-      await _isar!.writeTxn(() async {
-        await _isar!.isarReceivables.delete(receivable.id);
+      await isar.writeTxn(() async {
+        await isar.isarReceivables.delete(receivable.id);
       });
     }
   }

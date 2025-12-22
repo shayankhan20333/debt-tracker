@@ -184,12 +184,20 @@ class _HomeScreenState extends State<HomeScreen> {
     for (var receivable in receivables) {
       if (receivable.participants.isEmpty) continue;
 
-      // Check if current user is creator (receivable)
-      if (receivable.participants[0] == currentUserId) {
+      final isCreator = receivable.participants.first == currentUserId;
+
+      if (isCreator) {
         for (int i = 1; i < receivable.participants.length; i++) {
           final amount = i < receivable.rate.length ? receivable.rate[i] : 0.0;
-          totalReceivables += amount;
-          if (amount > 0) {
+          final paid = i < receivable.isPaid.length
+              ? receivable.isPaid[i]
+              : false;
+          final received = i < receivable.isReceived.length
+              ? receivable.isReceived[i]
+              : false;
+          final settled = paid && received;
+          if (!settled && amount > 0) {
+            totalReceivables += amount;
             peopleOweYou.add(receivable.participants[i]);
           }
         }
@@ -199,8 +207,15 @@ class _HomeScreenState extends State<HomeScreen> {
       for (int i = 1; i < receivable.participants.length; i++) {
         if (receivable.participants[i] == currentUserId) {
           final amount = i < receivable.rate.length ? receivable.rate[i] : 0.0;
-          totalLoans += amount;
-          if (amount > 0) {
+          final paid = i < receivable.isPaid.length
+              ? receivable.isPaid[i]
+              : false;
+          final received = i < receivable.isReceived.length
+              ? receivable.isReceived[i]
+              : false;
+          final settled = paid && received;
+          if (!settled && amount > 0) {
+            totalLoans += amount;
             youOwePeople.add(receivable.participants[0]);
           }
           break;

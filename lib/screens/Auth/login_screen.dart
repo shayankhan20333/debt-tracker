@@ -8,7 +8,6 @@ import 'package:depth_tracker/screens/Auth/register_screen.dart';
 import 'package:depth_tracker/screens/loading_manager.dart';
 import 'package:depth_tracker/services/user_services.dart';
 import 'package:depth_tracker/widgets/app_name_text.dart';
-import 'package:depth_tracker/widgets/my_app_function.dart';
 import 'package:depth_tracker/widgets/subtitle_text.dart';
 import 'package:depth_tracker/widgets/title_text.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -43,6 +42,34 @@ class _LoginScreenState extends State<LoginScreen> {
 
   late FirebaseAuth _auth;
 
+  void _showSnack(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red : null,
+      ),
+    );
+  }
+
+  String _mapAuthError(String code) {
+    switch (code) {
+      case 'user-not-found':
+        return 'No account found for that email.';
+      case 'wrong-password':
+        return 'Incorrect password. Please try again.';
+      case 'invalid-email':
+        return 'Please enter a valid email.';
+      case 'user-disabled':
+        return 'This account has been disabled.';
+      case 'too-many-requests':
+        return 'Too many attempts. Try again later.';
+      case 'network-request-failed':
+        return 'Network error. Check your connection.';
+      default:
+        return 'Authentication failed. Please try again.';
+    }
+  }
+
   @override
   void initState() {
     _formkey = GlobalKey<FormState>();
@@ -71,61 +98,65 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> login() async {
-    late bool isvalid = _formkey.currentState!.validate();
+    if (isLoading) return;
+    final bool isValid = _formkey.currentState!.validate();
     FocusScope.of(context).unfocus();
-    if (isvalid) {
-      try {
-        setState(() {
-          isLoading = true;
-        });
+    if (!isValid) return;
+    setState(() {
+      isLoading = true;
+    });
 
-        //login the user with firebase email and password
-        final userId = await firebaseUser.signInWithEmail(
-          emailController.text.trim(),
-          passwordController.text.trim(),
-        );
+    try {
+      final userId = await firebaseUser.signInWithEmail(
+        emailController.text.trim(),
+        passwordController.text.trim(),
+      );
 
-        //fetch the user data and save it in local database
-        if (userId != null) {
-          final userData = await userService.fetchUserById(userId);
-          userService.createUser(userData!);
+      if (userId != null) {
+        final userData = await userService.fetchUserById(userId);
+        if (userData != null) {
+          await userService.cacheUserLocally(userData);
+        } else {
+          final currentUser = _auth.currentUser;
+          if (currentUser != null) {
+            await userService.ensureUserProfile(currentUser);
+          }
         }
+      }
 
-        await Fluttertoast.showToast(msg: "Login Successful");
-        GoogleSignIn().signOut();
+      await Fluttertoast.showToast(msg: "Login Successful");
+      await GoogleSignIn().signOut();
+      if (!mounted) return;
+      await Navigator.pushNamedAndRemoveUntil(
+        context,
+        RootScreen.routeName,
+        (route) => false,
+      );
+    } on FirebaseAuthException catch (e) {
+      _showSnack(_mapAuthError(e.code), isError: true);
+    } catch (error) {
+      _showSnack("Account not found", isError: true);
+    } finally {
+      if (mounted) {
         setState(() {
           isLoading = false;
         });
-        if (!mounted) return;
-        await Navigator.pushNamedAndRemoveUntil(
-          context,
-          RootScreen.routeName,
-          (route) => false,
-        );
-      } catch (error) {
-        if (!mounted) return;
-        await MyAppFunction.showErrorAndAlertDialog(
-          context: context,
-          description: "Account not found",
-          fucntionBtnName: 'OK',
-          function: () {
-            if (Navigator.canPop(context)) {
-              Navigator.pop(context);
-            }
-          },
-        );
       }
     }
   }
 
   Future<void> _googleSignIn() async {
+    if (isLoading) return;
+    setState(() {
+      isLoading = true;
+    });
     try {
       final userInfo = await firebaseUser.signInWithGoogle();
 
       if (userInfo == "Login cancelled") {
-        Fluttertoast.showToast(msg: userInfo);
+        _showSnack(userInfo);
       } else if (userInfo == "Google sign-in failed: Missing tokens") {
-        _showError(userInfo);
+        _showSnack(userInfo, isError: true);
       } else if (userInfo == "new user") {
         final User user = _auth.currentUser!;
         userService.createUser(
@@ -138,38 +169,24 @@ class _LoginScreenState extends State<LoginScreen> {
             createdAt: firestore.Timestamp.now(),
           ),
         );
-      } else {
-        await Fluttertoast.showToast(msg: "Login Successful");
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          Navigator.pushNamedAndRemoveUntil(
-            context,
-            RootScreen.routeName,
-            (route) => false,
-          );
-        });
+      }
+      await Fluttertoast.showToast(msg: "Login Successful");
+      if (mounted) {
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          RootScreen.routeName,
+          (route) => false,
+        );
       }
     } on FirebaseAuthException catch (error) {
-      _showError(error.message ?? "Unknown Firebase error");
-    } catch (error) {
-      _showError(error.toString());
+      _showSnack(_mapAuthError(error.code), isError: true);
+  } catch (error) {
+      _showSnack(error.toString(), isError: true);
     } finally {
       setState(() {
         isLoading = false;
       });
     }
-  }
-
-  void _showError(String message) {
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await MyAppFunction.showErrorAndAlertDialog(
-        context: context,
-        description: message,
-        fucntionBtnName: 'OK',
-        function: () {
-          if (Navigator.canPop(context)) Navigator.pop(context);
-        },
-      );
-    });
   }
 
   @override
@@ -260,12 +277,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      isLoading = true;
-                    });
-                    login();
-                  },
+                  onPressed: isLoading ? null : login,
                   style: ButtonStyle(
                     minimumSize: WidgetStateProperty.all(
                       Size(double.infinity, 40),
@@ -282,40 +294,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                Row(
-                  spacing: 10,
-                  children: [
-                    Flexible(
-                      child: ElevatedButton.icon(
-                        onPressed: () async {
-                          setState(() {
-                            isLoading = true;
-                          });
-                          await _googleSignIn();
-                        },
-                        style: ButtonStyle(
-                          minimumSize: WidgetStateProperty.all(
-                            Size(double.infinity, 40),
-                          ),
-                          elevation: WidgetStatePropertyAll(1),
-                        ),
-                        icon: Icon(Ionicons.logo_google, color: Colors.red),
-                        label: FittedBox(
-                          child: SubtitleText(title: "Sign in with Google"),
-                        ),
-                      ),
+                ElevatedButton.icon(
+                  onPressed: isLoading ? null : () async => _googleSignIn(),
+                  style: ButtonStyle(
+                    minimumSize: WidgetStateProperty.all(
+                      Size(double.infinity, 40),
                     ),
-                    ElevatedButton(
-                      onPressed: () {
-                        Navigator.pushNamed(context, RootScreen.routeName);
-                      },
-                      style: ButtonStyle(
-                        minimumSize: WidgetStateProperty.all(Size(10, 40)),
-                        elevation: WidgetStatePropertyAll(1),
-                      ),
-                      child: SubtitleText(title: "Guest?"),
-                    ),
-                  ],
+                    elevation: WidgetStatePropertyAll(1),
+                  ),
+                  icon: Icon(Ionicons.logo_google, color: Colors.red),
+                  label: FittedBox(
+                    child: SubtitleText(title: "Sign in with Google"),
+                  ),
                 ),
                 GestureDetector(
                   onTap: () {

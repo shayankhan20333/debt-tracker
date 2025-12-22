@@ -4192,3 +4192,706 @@ extension IsarReceivableQueryProperty
     });
   }
 }
+
+// coverage:ignore-file
+// ignore_for_file: duplicate_ignore, non_constant_identifier_names, constant_identifier_names, invalid_use_of_protected_member, unnecessary_cast, prefer_const_constructors, lines_longer_than_80_chars, require_trailing_commas, inference_failure_on_function_invocation, unnecessary_parenthesis, unnecessary_raw_strings, unnecessary_null_checks, join_return_with_assignment, prefer_final_locals, avoid_js_rounded_ints, avoid_positional_boolean_parameters, always_specify_types
+
+extension GetIsarStatusCollection on Isar {
+  IsarCollection<IsarStatus> get isarStatus => this.collection();
+}
+
+const IsarStatusSchema = CollectionSchema(
+  name: r'IsarStatus',
+  id: 2802014095801570202,
+  properties: {
+    r'lastTimeUpdatedFirebase': PropertySchema(
+      id: 0,
+      name: r'lastTimeUpdatedFirebase',
+      type: IsarType.dateTime,
+    ),
+    r'lastTimeUpdatedIsar': PropertySchema(
+      id: 1,
+      name: r'lastTimeUpdatedIsar',
+      type: IsarType.dateTime,
+    ),
+    r'receivableId': PropertySchema(
+      id: 2,
+      name: r'receivableId',
+      type: IsarType.string,
+    )
+  },
+  estimateSize: _isarStatusEstimateSize,
+  serialize: _isarStatusSerialize,
+  deserialize: _isarStatusDeserialize,
+  deserializeProp: _isarStatusDeserializeProp,
+  idName: r'id',
+  indexes: {},
+  links: {},
+  embeddedSchemas: {},
+  getId: _isarStatusGetId,
+  getLinks: _isarStatusGetLinks,
+  attach: _isarStatusAttach,
+  version: '3.1.0+1',
+);
+
+int _isarStatusEstimateSize(
+  IsarStatus object,
+  List<int> offsets,
+  Map<Type, List<int>> allOffsets,
+) {
+  var bytesCount = offsets.last;
+  {
+    final value = object.receivableId;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  return bytesCount;
+}
+
+void _isarStatusSerialize(
+  IsarStatus object,
+  IsarWriter writer,
+  List<int> offsets,
+  Map<Type, List<int>> allOffsets,
+) {
+  writer.writeDateTime(offsets[0], object.lastTimeUpdatedFirebase);
+  writer.writeDateTime(offsets[1], object.lastTimeUpdatedIsar);
+  writer.writeString(offsets[2], object.receivableId);
+}
+
+IsarStatus _isarStatusDeserialize(
+  Id id,
+  IsarReader reader,
+  List<int> offsets,
+  Map<Type, List<int>> allOffsets,
+) {
+  final object = IsarStatus();
+  object.id = id;
+  object.lastTimeUpdatedFirebase = reader.readDateTimeOrNull(offsets[0]);
+  object.lastTimeUpdatedIsar = reader.readDateTimeOrNull(offsets[1]);
+  object.receivableId = reader.readStringOrNull(offsets[2]);
+  return object;
+}
+
+P _isarStatusDeserializeProp<P>(
+  IsarReader reader,
+  int propertyId,
+  int offset,
+  Map<Type, List<int>> allOffsets,
+) {
+  switch (propertyId) {
+    case 0:
+      return (reader.readDateTimeOrNull(offset)) as P;
+    case 1:
+      return (reader.readDateTimeOrNull(offset)) as P;
+    case 2:
+      return (reader.readStringOrNull(offset)) as P;
+    default:
+      throw IsarError('Unknown property with id $propertyId');
+  }
+}
+
+Id _isarStatusGetId(IsarStatus object) {
+  return object.id;
+}
+
+List<IsarLinkBase<dynamic>> _isarStatusGetLinks(IsarStatus object) {
+  return [];
+}
+
+void _isarStatusAttach(IsarCollection<dynamic> col, Id id, IsarStatus object) {
+  object.id = id;
+}
+
+extension IsarStatusQueryWhereSort
+    on QueryBuilder<IsarStatus, IsarStatus, QWhere> {
+  QueryBuilder<IsarStatus, IsarStatus, QAfterWhere> anyId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(const IdWhereClause.any());
+    });
+  }
+}
+
+extension IsarStatusQueryWhere
+    on QueryBuilder<IsarStatus, IsarStatus, QWhereClause> {
+  QueryBuilder<IsarStatus, IsarStatus, QAfterWhereClause> idEqualTo(Id id) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IdWhereClause.between(
+        lower: id,
+        upper: id,
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterWhereClause> idNotEqualTo(Id id) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(
+              IdWhereClause.lessThan(upper: id, includeUpper: false),
+            )
+            .addWhereClause(
+              IdWhereClause.greaterThan(lower: id, includeLower: false),
+            );
+      } else {
+        return query
+            .addWhereClause(
+              IdWhereClause.greaterThan(lower: id, includeLower: false),
+            )
+            .addWhereClause(
+              IdWhereClause.lessThan(upper: id, includeUpper: false),
+            );
+      }
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterWhereClause> idGreaterThan(Id id,
+      {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        IdWhereClause.greaterThan(lower: id, includeLower: include),
+      );
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterWhereClause> idLessThan(Id id,
+      {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        IdWhereClause.lessThan(upper: id, includeUpper: include),
+      );
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterWhereClause> idBetween(
+    Id lowerId,
+    Id upperId, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IdWhereClause.between(
+        lower: lowerId,
+        includeLower: includeLower,
+        upper: upperId,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+}
+
+extension IsarStatusQueryFilter
+    on QueryBuilder<IsarStatus, IsarStatus, QFilterCondition> {
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition> idEqualTo(
+      Id value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'id',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition> idGreaterThan(
+    Id value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'id',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition> idLessThan(
+    Id value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'id',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition> idBetween(
+    Id lower,
+    Id upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'id',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      lastTimeUpdatedFirebaseIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'lastTimeUpdatedFirebase',
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      lastTimeUpdatedFirebaseIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'lastTimeUpdatedFirebase',
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      lastTimeUpdatedFirebaseEqualTo(DateTime? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'lastTimeUpdatedFirebase',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      lastTimeUpdatedFirebaseGreaterThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'lastTimeUpdatedFirebase',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      lastTimeUpdatedFirebaseLessThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'lastTimeUpdatedFirebase',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      lastTimeUpdatedFirebaseBetween(
+    DateTime? lower,
+    DateTime? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'lastTimeUpdatedFirebase',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      lastTimeUpdatedIsarIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'lastTimeUpdatedIsar',
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      lastTimeUpdatedIsarIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'lastTimeUpdatedIsar',
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      lastTimeUpdatedIsarEqualTo(DateTime? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'lastTimeUpdatedIsar',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      lastTimeUpdatedIsarGreaterThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'lastTimeUpdatedIsar',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      lastTimeUpdatedIsarLessThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'lastTimeUpdatedIsar',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      lastTimeUpdatedIsarBetween(
+    DateTime? lower,
+    DateTime? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'lastTimeUpdatedIsar',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      receivableIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'receivableId',
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      receivableIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'receivableId',
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      receivableIdEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'receivableId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      receivableIdGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'receivableId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      receivableIdLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'receivableId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      receivableIdBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'receivableId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      receivableIdStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'receivableId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      receivableIdEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'receivableId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      receivableIdContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'receivableId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      receivableIdMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'receivableId',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      receivableIdIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'receivableId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterFilterCondition>
+      receivableIdIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'receivableId',
+        value: '',
+      ));
+    });
+  }
+}
+
+extension IsarStatusQueryObject
+    on QueryBuilder<IsarStatus, IsarStatus, QFilterCondition> {}
+
+extension IsarStatusQueryLinks
+    on QueryBuilder<IsarStatus, IsarStatus, QFilterCondition> {}
+
+extension IsarStatusQuerySortBy
+    on QueryBuilder<IsarStatus, IsarStatus, QSortBy> {
+  QueryBuilder<IsarStatus, IsarStatus, QAfterSortBy>
+      sortByLastTimeUpdatedFirebase() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastTimeUpdatedFirebase', Sort.asc);
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterSortBy>
+      sortByLastTimeUpdatedFirebaseDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastTimeUpdatedFirebase', Sort.desc);
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterSortBy>
+      sortByLastTimeUpdatedIsar() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastTimeUpdatedIsar', Sort.asc);
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterSortBy>
+      sortByLastTimeUpdatedIsarDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastTimeUpdatedIsar', Sort.desc);
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterSortBy> sortByReceivableId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'receivableId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterSortBy> sortByReceivableIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'receivableId', Sort.desc);
+    });
+  }
+}
+
+extension IsarStatusQuerySortThenBy
+    on QueryBuilder<IsarStatus, IsarStatus, QSortThenBy> {
+  QueryBuilder<IsarStatus, IsarStatus, QAfterSortBy> thenById() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'id', Sort.asc);
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterSortBy> thenByIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'id', Sort.desc);
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterSortBy>
+      thenByLastTimeUpdatedFirebase() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastTimeUpdatedFirebase', Sort.asc);
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterSortBy>
+      thenByLastTimeUpdatedFirebaseDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastTimeUpdatedFirebase', Sort.desc);
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterSortBy>
+      thenByLastTimeUpdatedIsar() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastTimeUpdatedIsar', Sort.asc);
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterSortBy>
+      thenByLastTimeUpdatedIsarDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastTimeUpdatedIsar', Sort.desc);
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterSortBy> thenByReceivableId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'receivableId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QAfterSortBy> thenByReceivableIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'receivableId', Sort.desc);
+    });
+  }
+}
+
+extension IsarStatusQueryWhereDistinct
+    on QueryBuilder<IsarStatus, IsarStatus, QDistinct> {
+  QueryBuilder<IsarStatus, IsarStatus, QDistinct>
+      distinctByLastTimeUpdatedFirebase() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'lastTimeUpdatedFirebase');
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QDistinct>
+      distinctByLastTimeUpdatedIsar() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'lastTimeUpdatedIsar');
+    });
+  }
+
+  QueryBuilder<IsarStatus, IsarStatus, QDistinct> distinctByReceivableId(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'receivableId', caseSensitive: caseSensitive);
+    });
+  }
+}
+
+extension IsarStatusQueryProperty
+    on QueryBuilder<IsarStatus, IsarStatus, QQueryProperty> {
+  QueryBuilder<IsarStatus, int, QQueryOperations> idProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'id');
+    });
+  }
+
+  QueryBuilder<IsarStatus, DateTime?, QQueryOperations>
+      lastTimeUpdatedFirebaseProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'lastTimeUpdatedFirebase');
+    });
+  }
+
+  QueryBuilder<IsarStatus, DateTime?, QQueryOperations>
+      lastTimeUpdatedIsarProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'lastTimeUpdatedIsar');
+    });
+  }
+
+  QueryBuilder<IsarStatus, String?, QQueryOperations> receivableIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'receivableId');
+    });
+  }
+}

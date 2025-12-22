@@ -4,7 +4,6 @@ import 'package:depth_tracker/DataBase/firebase/firebase_low_level_classes.dart'
 import 'package:depth_tracker/DataBase/isar/isar_collections/isar_collections.dart';
 import 'package:depth_tracker/DataBase/isar/isar_low_level_implementation.dart';
 import 'package:depth_tracker/model/loan_model.dart';
-import 'package:isar/isar.dart';
 
 class LoanService {
   static LoanService? _instance;
@@ -16,9 +15,55 @@ class LoanService {
     _remoteLoanRepo = FirebaseLoanRepository();
     _localLoanRepo = IsarLoanRepository();
     _instance = this;
+    _startFirebaseListener();
   }
 
   factory LoanService() => _instance ?? LoanService._internal();
+
+  void _startFirebaseListener() {
+    firestore.FirebaseFirestore.instance.collection('Loans').snapshots().listen(
+      (snapshot) {
+        _syncFromFirebase(snapshot.docs);
+      },
+    );
+  }
+
+  Future<void> _syncFromFirebase(
+    List<firestore.QueryDocumentSnapshot> docs,
+  ) async {
+    try {
+      final isar = await _localLoanRepo.databaseInstance;
+      final loans = docs.map<IsarLoan>((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return IsarLoan()
+          ..loanId = data["id"]?.toString() ?? ''
+          ..userId = data['userId']?.toString() ?? ''
+          ..method = data['method']?.toString() ?? 'Unknown Method'
+          ..rate = (data['rate'] as num?)?.toDouble() ?? 0.0
+          ..createdAt = DateTime.now();
+      }).toList();
+
+      await isar.writeTxn(() async {
+        await isar.isarLoans.clear();
+        await isar.isarLoans.putAll(loans);
+      });
+    } catch (e) {
+      print('Error syncing loans from Firebase: $e');
+    }
+  }
+
+  Stream<List<IsarLoan>> watchLoans(String userId) async* {
+    try {
+      final isar = await _localLoanRepo.databaseInstance;
+      yield* isar.isarLoans
+          .filter()
+          .userIdEqualTo(userId)
+          .watch(fireImmediately: true);
+    } catch (e) {
+      print('Error watching loans: $e');
+      yield [];
+    }
+  }
 
   Future<void> initializeDatabase() async {
     await _remoteLoanRepo.initializeDatabase();
@@ -33,67 +78,12 @@ class LoanService {
 
   Future<List<IsarLoan>> fetchAllLoans(String userId) async {
     await initializeDatabase();
-    Isar isarInstance = await _localLoanRepo.databaseInstance;
-
-    List<dynamic> firebasedata = await _remoteLoanRepo.loanLength();
-    int isarcount = await _localLoanRepo.loanLength();
-
-    if (firebasedata[0] > isarcount) {
-      final existingIds = await isarInstance.isarLoans
-          .where()
-          .loanIdProperty()
-          .findAll();
-
-      final newLoans = firebasedata[1]
-          .where((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            final docId = data["id"]?.toString() ?? '';
-            return !existingIds.contains(docId);
-          })
-          .map<IsarLoan>((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            return IsarLoan()
-              ..loanId = data["id"]?.toString() ?? ''
-              ..userId = data['userId']?.toString() ?? ''
-              ..method = data['method']?.toString() ?? 'Unknown Method'
-              ..rate = (data['rate'] as num?)?.toDouble() ?? 0.0
-              ..createdAt = DateTime.now();
-          })
-          .toList();
-
-      if (newLoans.isNotEmpty) {
-        await isarInstance.writeTxn(() async {
-          await isarInstance.isarLoans.putAll(newLoans);
-        });
-      }
-    } else if (isarcount > firebasedata[0]) {
-      final firebaseIds = firebasedata[1].map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        return data["id"]?.toString() ?? '';
-      }).toList();
-
-      final localLoans = await isarInstance.isarLoans.where().findAll();
-      final newLocalLoans = localLoans.where((loan) {
-        return !firebaseIds.contains(loan.loanId);
-      }).toList();
-
-      for (var loan in newLocalLoans) {
-        final loanModel = LoanModel(
-          id: int.parse(loan.loanId ?? '0'),
-          userId: loan.userId ?? '',
-          lenderUserId: '', // Default empty since we don't have this info
-          receivableId: '', // Default empty since we don't have this info
-          method: LoanMethod.values.firstWhere(
-            (m) => m.name == loan.method,
-            orElse: () => LoanMethod.equalDistribution,
-          ),
-          rate: loan.rate ?? 0.0,
-          createdAt: firestore.Timestamp.fromDate(loan.createdAt ?? DateTime.now()),
-        );
-        await _remoteLoanRepo.addLoan(loanModel);
-      }
+    try {
+      final isar = await _localLoanRepo.databaseInstance;
+      return await isar.isarLoans.filter().userIdEqualTo(userId).findAll();
+    } catch (e) {
+      print('ERROR fetching loans: $e');
+      return [];
     }
-
-    return await isarInstance.isarLoans.filter().userIdEqualTo(userId).findAll();
   }
 }

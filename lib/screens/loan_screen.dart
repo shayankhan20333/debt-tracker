@@ -85,7 +85,7 @@ class _LoanScreenState extends State<LoanScreen> {
                   lenderData[lenderName]!['loans']
                       as List<Map<String, dynamic>>;
               final userImagePath =
-                  lenderData[lenderName]!['userImagePath'] as String;
+                  (lenderData[lenderName]!['userImagePath'] as String?) ?? '';
               return customListTile(
                 size,
                 lenderName,
@@ -145,7 +145,15 @@ class _LoanScreenState extends State<LoanScreen> {
             ? receivable.rate[currentUserIndex]
             : 0.0;
 
-        if (amountOwed > 0) {
+        final paid = currentUserIndex < receivable.isPaid.length
+            ? receivable.isPaid[currentUserIndex]
+            : false;
+        final received = currentUserIndex < receivable.isReceived.length
+            ? receivable.isReceived[currentUserIndex]
+            : false;
+        final settled = paid && received;
+
+        if (amountOwed > 0 && !settled) {
           if (lenderData.containsKey(creatorName)) {
             lenderData[creatorName]!['totalAmount'] =
                 (lenderData[creatorName]!['totalAmount'] as double) +
@@ -156,10 +164,9 @@ class _LoanScreenState extends State<LoanScreen> {
                   'description': receivable.description,
                   'amount': amountOwed,
                   'method': receivable.method,
-                  'createdAt': receivable.createdAt,
-                  'isPaid': currentUserIndex < receivable.isPaid.length
-                      ? receivable.isPaid[currentUserIndex]
-                      : false,
+                  'createdAt': receivable.createdAt ?? DateTime.now(),
+                  'isPaid': paid,
+                  'isReceived': received,
                 });
           } else {
             lenderData[creatorName] = <String, dynamic>{
@@ -171,10 +178,9 @@ class _LoanScreenState extends State<LoanScreen> {
                   'description': receivable.description,
                   'amount': amountOwed,
                   'method': receivable.method,
-                  'createdAt': receivable.createdAt,
-                  'isPaid': currentUserIndex < receivable.isPaid.length
-                      ? receivable.isPaid[currentUserIndex]
-                      : false,
+                  'createdAt': receivable.createdAt ?? DateTime.now(),
+                  'isPaid': paid,
+                  'isReceived': received,
                 },
               ],
             };

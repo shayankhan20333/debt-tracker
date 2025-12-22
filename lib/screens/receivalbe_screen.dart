@@ -2,6 +2,7 @@ import 'package:depth_tracker/DataBase/firebase/firebase_low_level_classes.dart'
 import 'package:depth_tracker/DataBase/isar/isar_collections/isar_collections.dart';
 import 'package:depth_tracker/providers/receivable_provider.dart';
 import 'package:depth_tracker/screens/inner%20screens/receivable_detail_screen.dart';
+import 'package:depth_tracker/screens/form/recievable_form_screen.dart';
 import 'package:depth_tracker/services/assets_manager.dart';
 import 'package:depth_tracker/services/user_services.dart';
 import 'package:depth_tracker/widgets/subtitle_text.dart';
@@ -21,7 +22,11 @@ class _ReceivalbeScreenState extends State<ReceivalbeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      getAllReceivalbes();
+      final receivableProvider = Provider.of<ReceivableProvider>(
+        context,
+        listen: false,
+      );
+      receivableProvider.startListening();
     });
   }
 
@@ -54,19 +59,20 @@ class _ReceivalbeScreenState extends State<ReceivalbeScreen> {
         final isReceived = i < receivable.isReceived.length
             ? receivable.isReceived[i]
             : false;
+        final isPaid =
+            i < receivable.isPaid.length ? receivable.isPaid[i] : false;
+        final settled = isPaid && isReceived;
 
         // Only process if user has an amount in this receivable
-        if (amount > 0) {
+        if (amount > 0 && !settled) {
           if (userData.containsKey(userName)) {
-            if (!isReceived) {
-              userData[userName]!['totalAmount'] += amount;
-            }
+            userData[userName]!['totalAmount'] += amount;
             (userData[userName]!['receivableIds'] as List<String>).add(
               receivable.receivableId ?? '',
             );
           } else {
             userData[userName] = {
-              'totalAmount': isReceived ? 0.0 : amount,
+              'totalAmount': amount,
               'receivableIds': [receivable.receivableId ?? ''],
               'userImagePath': user?.userImagePath,
             };
@@ -120,11 +126,39 @@ class _ReceivalbeScreenState extends State<ReceivalbeScreen> {
           final users = userData.keys.toList();
 
           if (receivableProvider.getReceivables.isEmpty) {
-            return Center(child: TitleText(title: "No Receivables Available"));
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TitleText(title: "No Receivables Available"),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pushNamed(
+                      context,
+                      RecievableFormScreen.roatName,
+                    );
+                  },
+                  child: const Text("Add Receivable"),
+                ),
+              ],
+            );
           }
 
           if (users.isEmpty) {
-            return Center(child: TitleText(title: "No Receivables Available"));
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TitleText(title: "No Receivables Available"),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pushNamed(
+                      context,
+                      RecievableFormScreen.roatName,
+                    );
+                  },
+                  child: const Text("Add Receivable"),
+                ),
+              ],
+            );
           }
 
           // Sort users by total amount (highest first)
@@ -142,7 +176,7 @@ class _ReceivalbeScreenState extends State<ReceivalbeScreen> {
               final receivableIds =
                   userData[userName]!['receivableIds'] as List<String>;
               final userImagePath =
-                  userData[userName]!['userImagePath'] as String;
+                  (userData[userName]!['userImagePath'] as String?) ?? '';
               return customeListTile(
                 size,
                 userName,

@@ -43,11 +43,11 @@ dependencies:
   flutter_iconly: ^1.0.2
   ionicons: ^0.2.2
 
-#  isar:  ^4.0.0-dev.14
-#  isar_flutter_libs: ^4.0.0-dev.14 # contains Isar Core
-  isar: ^3.1.0+1
-  isar_flutter_libs: ^3.1.0+1
-  isar_generator: ^3.1.0+1
+  # isar:  ^4.0.0-dev.14
+  # isar_flutter_libs: ^4.0.0-dev.14 # contains Isar Core
+  isar: ^3.1.0+1 
+  isar_flutter_libs: ^3.1.0+1 
+  isar_generator: ^3.1.0+1 
 
   # isar_annotation: 4.0.0-dev.14 # contains Isar annotations for code generation
   path_provider: ^2.1.5
@@ -77,6 +77,10 @@ dev_dependencies:
   flutter_lints: ^6.0.0
 # isar_generator: ^4.0.0-dev.14
   build_runner: ^2.4.13
+
+dependency_overrides:
+  isar_flutter_libs:
+    path: packages/isar_flutter_libs
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

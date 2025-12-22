@@ -21,6 +21,8 @@ class LoanDetailScreen extends StatefulWidget {
 }
 
 class _LoanDetailScreenState extends State<LoanDetailScreen> {
+  bool _isProcessing = false;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -28,23 +30,36 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
         title: "Loans from ${widget.lenderName}",
         hasTitleDecoration: true,
       ),
-      body: Consumer<ReceivableProvider>(
-        builder: (context, provider, child) {
-          return FutureBuilder<List<Map<String, dynamic>>>(
-            future: _filterAndSortLoans(provider),
-            builder: (context, snapshot) {
-              final sortedLoans = snapshot.data ?? [];
+      body: Stack(
+        children: [
+          Consumer<ReceivableProvider>(
+            builder: (context, provider, child) {
+              return FutureBuilder<List<Map<String, dynamic>>>(
+                future: _filterAndSortLoans(provider),
+                builder: (context, snapshot) {
+                  final sortedLoans = snapshot.data ?? [];
 
-              return ListView.builder(
-                padding: EdgeInsets.all(16),
-                itemCount: sortedLoans.length,
-                itemBuilder: (context, index) {
-                  return loanCard(sortedLoans[index]);
+                  if (sortedLoans.isEmpty) {
+                    return Center(child: TitleText(title: "No Loans Available"));
+                  }
+
+                  return ListView.builder(
+                    padding: EdgeInsets.all(16),
+                    itemCount: sortedLoans.length,
+                    itemBuilder: (context, index) {
+                      return loanCard(sortedLoans[index]);
+                    },
+                  );
                 },
               );
             },
-          );
-        },
+          ),
+          if (_isProcessing)
+            Container(
+              color: const Color.fromARGB(80, 0, 0, 0),
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+        ],
       ),
     );
   }
@@ -134,6 +149,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                 builder: (context, snapshot) {
                   final status =
                       snapshot.data ?? {'isPaid': false, 'isReceived': false};
+                  final settled = status['isPaid']! && status['isReceived']!;
                   return Column(
                     children: [
                       Row(
@@ -156,8 +172,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                           Icon(Icons.receipt, color: Colors.white70, size: 16),
                           SizedBox(width: 8),
                           SubtitleText(
-                            title:
-                                '${widget.lenderName}: ${status['isReceived']! ? 'Received' : 'Not Received'}',
+                            title: '${widget.lenderName}: ${status['isReceived']! ? 'Received' : 'Not Received'}',
                             fontSize: 14,
                             color: status['isReceived']!
                                 ? Colors.green
@@ -165,35 +180,30 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                           ),
                         ],
                       ),
+                      SizedBox(height: 4),
+                      SubtitleText(
+                        title: settled ? 'Settled' : 'Outstanding',
+                        fontSize: 12,
+                        color: settled ? Colors.green : Colors.orange,
+                      ),
                     ],
                   );
                 },
               ),
               SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: () => _deleteLoan(loan),
-                    icon: Icon(Icons.delete, size: 16),
-                    label: Text('Delete'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                    ),
-                  ),
-                  if (!(loan['isPaid'] ?? false)) ...[
-                    SizedBox(width: 8),
+              Builder(builder: (context) {
+                final loanPaid = loan['isPaid'] ?? false;
+                final loanReceived = loan['isReceived'] ?? false;
+                final loanSettled = loanPaid && loanReceived;
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
                     ElevatedButton.icon(
-                      onPressed: () => _markAsPaid(loan),
-                      icon: Icon(Icons.payment, size: 16),
-                      label: Text('Pay'),
+                      onPressed: _isProcessing ? null : () => _deleteLoan(loan),
+                      icon: Icon(Icons.delete, size: 16),
+                      label: Text('Delete'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
+                        backgroundColor: Colors.red,
                         foregroundColor: Colors.white,
                         padding: EdgeInsets.symmetric(
                           horizontal: 12,
@@ -201,9 +211,26 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                         ),
                       ),
                     ),
+                    if (!loanSettled) ...[
+                      SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        onPressed:
+                            _isProcessing ? null : () => _markAsPaid(loan),
+                        icon: Icon(Icons.payment, size: 16),
+                        label: Text('Pay'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
-                ],
-              ),
+                );
+              }),
             ],
           ),
         ),
@@ -214,46 +241,19 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
   Future<List<Map<String, dynamic>>> _filterAndSortLoans(
     ReceivableProvider provider,
   ) async {
-    final authService = FirebaseAuthService();
-    final currentUserId = authService.getCurrentUserId();
-
-    List<Map<String, dynamic>> validLoans = [];
-
-    for (final loan in widget.loans) {
-      final receivableId = loan['receivableId'] as String;
-      final receivable = provider.getReceivables
-          .where((r) => r.receivableId == receivableId)
-          .firstOrNull;
-
-      if (receivable != null) {
-        // Check if current user is still a participant with amount > 0
-        for (int i = 0; i < receivable.participants.length; i++) {
-          if (receivable.participants[i] == currentUserId) {
-            final amount = i < receivable.rate.length
-                ? receivable.rate[i]
-                : 0.0;
-            if (amount > 0) {
-              final isPaid = i < receivable.isPaid.length
-                  ? receivable.isPaid[i]
-                  : false;
-              validLoans.add({...loan, 'amount': amount, 'isPaid': isPaid});
-            }
-            break;
-          }
-        }
-      }
-    }
-
     // Sort: unpaid first, then by date
-    validLoans.sort((a, b) {
-      final aPaid = a['isPaid'] ?? false;
-      final bPaid = b['isPaid'] ?? false;
-      if (aPaid && !bPaid) return 1;
-      if (!aPaid && bPaid) return -1;
+    final sortedLoans = List<Map<String, dynamic>>.from(widget.loans);
+    sortedLoans.sort((a, b) {
+      final aSettled =
+          (a['isPaid'] ?? false) && (a['isReceived'] ?? false);
+      final bSettled =
+          (b['isPaid'] ?? false) && (b['isReceived'] ?? false);
+      if (aSettled && !bSettled) return 1;
+      if (!aSettled && bSettled) return -1;
       return (b['createdAt'] as DateTime).compareTo(a['createdAt'] as DateTime);
     });
 
-    return validLoans;
+    return sortedLoans;
   }
 
   Future<void> _deleteLoan(Map<String, dynamic> loan) async {
@@ -276,7 +276,15 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
     );
 
     if (confirmed == true) {
+      setState(() {
+        _isProcessing = true;
+      });
       await _removeUserFromLoan(loan);
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     }
   }
 
@@ -285,12 +293,20 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
     final currentUserId = authService.getCurrentUserId();
 
     if (currentUserId != null) {
+      setState(() {
+        _isProcessing = true;
+      });
       final provider = Provider.of<ReceivableProvider>(context, listen: false);
       await provider.updatePaymentStatus(
         context: context,
         receivableId: loan['receivableId'] as String,
         userId: currentUserId,
       );
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     }
   }
 
@@ -313,6 +329,9 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
           receivableId: receivableId,
           userIndex: userIndex,
         );
+        if (mounted) {
+          Navigator.pop(context);
+        }
       }
     }
   }
@@ -329,14 +348,12 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
 
     if (receivable != null && currentUserId != null) {
       final userIndex = receivable.participants.indexOf(currentUserId);
-      final creatorIndex = 0; // Creator is always first
-
       if (userIndex != -1) {
         final isPaid = userIndex < receivable.isPaid.length
             ? receivable.isPaid[userIndex]
             : false;
-        final isReceived = creatorIndex < receivable.isReceived.length
-            ? receivable.isReceived[creatorIndex]
+        final isReceived = userIndex < receivable.isReceived.length
+            ? receivable.isReceived[userIndex]
             : false;
 
         return {'isPaid': isPaid, 'isReceived': isReceived};
