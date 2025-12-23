@@ -9,11 +9,13 @@ import 'package:provider/provider.dart';
 class LoanDetailScreen extends StatefulWidget {
   final List<Map<String, dynamic>> loans;
   final String lenderName;
+  final String initialFilter;
 
   const LoanDetailScreen({
     super.key,
     required this.loans,
     required this.lenderName,
+    this.initialFilter = 'all',
   });
 
   @override
@@ -22,6 +24,13 @@ class LoanDetailScreen extends StatefulWidget {
 
 class _LoanDetailScreenState extends State<LoanDetailScreen> {
   bool _isProcessing = false;
+  late String _filter;
+
+  @override
+  void initState() {
+    super.initState();
+    _filter = widget.initialFilter;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +47,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                 future: _filterAndSortLoans(provider),
                 builder: (context, snapshot) {
                   final sortedLoans = snapshot.data ?? [];
+                  final visibleLoans = _applyFilter(sortedLoans);
                   final outstandingAmount = sortedLoans.fold<double>(
                     0,
                     (prev, loan) {
@@ -57,13 +67,47 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                       )
                       .length;
 
-                  if (sortedLoans.isEmpty) {
-                    return Center(child: TitleText(title: "No Loans Available"));
+                  if (visibleLoans.isEmpty) {
+                    return Column(
+                      children: [
+                        _detailHeader(
+                          outstanding: outstandingAmount,
+                          count: sortedLoans.length,
+                          settledCount: settledCount,
+                        ),
+                        _filterChips(),
+                        Expanded(
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                TitleText(
+                                  title: _filter == 'settled'
+                                      ? "No Settled loans"
+                                      : _filter == 'outstanding'
+                                          ? "No Outstanding loans"
+                                          : "No Loans Available",
+                                ),
+                                const SizedBox(height: 8),
+                                TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _filter = 'all';
+                                    });
+                                  },
+                                  child: const Text("Show All"),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
                   }
 
                   return ListView.builder(
                     padding: EdgeInsets.all(16),
-                    itemCount: sortedLoans.length + 1,
+                    itemCount: visibleLoans.length + 2,
                     itemBuilder: (context, index) {
                       if (index == 0) {
                         return _detailHeader(
@@ -72,7 +116,10 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                           settledCount: settledCount,
                         );
                       }
-                      return loanCard(sortedLoans[index - 1]);
+                      if (index == 1) {
+                        return _filterChips();
+                      }
+                      return loanCard(visibleLoans[index - 2]);
                     },
                   );
                 },
@@ -85,6 +132,48 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
               child: const Center(child: CircularProgressIndicator()),
             ),
         ],
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _applyFilter(List<Map<String, dynamic>> items) {
+    if (_filter == 'settled') {
+      return items
+          .where((loan) =>
+              (loan['isPaid'] == true) && (loan['isReceived'] == true))
+          .toList();
+    }
+    if (_filter == 'outstanding') {
+      return items
+          .where((loan) =>
+              !(loan['isPaid'] == true && loan['isReceived'] == true))
+          .toList();
+    }
+    return items;
+  }
+
+  Widget _filterChips() {
+    final filters = {
+      'all': 'All',
+      'outstanding': 'Outstanding',
+      'settled': 'Settled',
+    };
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Wrap(
+        spacing: 8,
+        children: filters.entries.map((entry) {
+          final selected = _filter == entry.key;
+          return ChoiceChip(
+            label: Text(entry.value),
+            selected: selected,
+            onSelected: (_) {
+              setState(() {
+                _filter = entry.key;
+              });
+            },
+          );
+        }).toList(),
       ),
     );
   }
@@ -181,21 +270,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  ElevatedButton.icon(
-                    onPressed: _isProcessing ? null : () => _deleteLoan(loan),
-                    icon: Icon(Icons.delete, size: 16),
-                    label: Text('Remove'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                    ),
-                  ),
-                  if (!settled) ...[
-                    const SizedBox(width: 8),
+                  if (!settled)
                     ElevatedButton.icon(
                       onPressed: _isProcessing ? null : () => _markAsPaid(loan),
                       icon: Icon(Icons.payment, size: 16),
@@ -209,7 +284,6 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                         ),
                       ),
                     ),
-                  ],
                 ],
               ),
             ],
@@ -277,40 +351,6 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
     return updatedLoans;
   }
 
-  Future<void> _deleteLoan(Map<String, dynamic> loan) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Remove Loan'),
-        content: Text('Remove yourself from this loan?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text('Remove', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      if (mounted) {
-        setState(() {
-          _isProcessing = true;
-        });
-      }
-      await _removeUserFromLoan(loan);
-      if (mounted) {
-        setState(() {
-          _isProcessing = false;
-        });
-      }
-    }
-  }
-
   Future<void> _markAsPaid(Map<String, dynamic> loan) async {
     final authService = FirebaseAuthService();
     final currentUserId = authService.getCurrentUserId();
@@ -331,32 +371,6 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
       setState(() {
         _isProcessing = false;
       });
-    }
-  }
-
-  Future<void> _removeUserFromLoan(Map<String, dynamic> loan) async {
-    final authService = FirebaseAuthService();
-    final currentUserId = authService.getCurrentUserId();
-    final provider = Provider.of<ReceivableProvider>(context, listen: false);
-    final receivableId = loan['receivableId'] as String;
-
-    // Find user index in the receivable
-    final receivable = provider.getReceivables
-        .where((r) => r.receivableId == receivableId)
-        .firstOrNull;
-
-    if (receivable != null && currentUserId != null) {
-      final userIndex = receivable.participants.indexOf(currentUserId);
-      if (userIndex != -1) {
-        await provider.removeUserFromReceivable(
-          context: context,
-          receivableId: receivableId,
-          userIndex: userIndex,
-        );
-        if (mounted) {
-          Navigator.pop(context);
-        }
-      }
     }
   }
 

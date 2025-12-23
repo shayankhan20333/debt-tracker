@@ -11,11 +11,15 @@ import 'package:provider/provider.dart';
 class ReceivableDetailScreen extends StatefulWidget {
   final List<IsarReceivable> receivables;
   final String userName;
+  final String? debtorId;
+  final String initialFilter;
 
   const ReceivableDetailScreen({
     super.key,
     required this.receivables,
     required this.userName,
+    this.debtorId,
+    this.initialFilter = 'all',
   });
 
   @override
@@ -24,6 +28,13 @@ class ReceivableDetailScreen extends StatefulWidget {
 
 class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
   bool _isProcessing = false;
+  late String _filter;
+
+  @override
+  void initState() {
+    super.initState();
+    _filter = widget.initialFilter;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,45 +55,123 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
         children: [
           Consumer<ReceivableProvider>(
             builder: (context, provider, child) {
-              final receivableIds = widget.receivables
-                  .map((r) => r.receivableId ?? '')
-                  .toList();
-              final allReceivables = provider.getReceivables
-                  .where((r) => receivableIds.contains(r.receivableId ?? ''))
-                  .toList();
+          final receivableIds = widget.receivables
+              .map((r) => r.receivableId ?? '')
+              .toList();
+          final allReceivables = provider.getReceivables
+              .where((r) => receivableIds.contains(r.receivableId ?? ''))
+              .toList();
 
-              return FutureBuilder<List<IsarReceivable>>(
-                future: _filterAndSortReceivables(allReceivables),
-                builder: (context, snapshot) {
-                  final sortedReceivables = snapshot.data ?? [];
+          return FutureBuilder<List<IsarReceivable>>(
+            future: _filterAndSortReceivables(allReceivables),
+            builder: (context, snapshot) {
+              final sortedReceivables = snapshot.data ?? [];
+              final visible = _applyFilter(sortedReceivables);
 
-                  if (sortedReceivables.isEmpty) {
-                    return Center(child: TitleText(title: "No Receivables"));
+              return ListView.builder(
+                padding: EdgeInsets.all(16),
+                itemCount: (visible.isEmpty ? 3 : visible.length + 2),
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return _detailHeader(
+                      outstanding: totalOutstanding,
+                      count: sortedReceivables.length,
+                    );
                   }
-
-                  return ListView.builder(
-                    padding: EdgeInsets.all(16),
-                    itemCount: sortedReceivables.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return _detailHeader(
-                          outstanding: totalOutstanding,
-                          count: sortedReceivables.length,
-                        );
-                      }
-                      return receivableCard(sortedReceivables[index - 1]);
-                    },
-                  );
+                  if (index == 1) {
+                    return _filterChips();
+                  }
+                  if (visible.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 40),
+                      child: Column(
+                        children: [
+                          TitleText(
+                            title: _filter == 'settled'
+                                ? "No Settled receivables"
+                                : _filter == 'outstanding'
+                                    ? "No Outstanding receivables"
+                                    : "No Receivables",
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _filter = 'all';
+                              });
+                            },
+                            child: const Text("Show All"),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  return receivableCard(visible[index - 2]);
                 },
               );
             },
-          ),
+          );
+        },
+      ),
           if (_isProcessing)
             Container(
               color: const Color.fromARGB(80, 0, 0, 0),
               child: const Center(child: CircularProgressIndicator()),
             ),
         ],
+      ),
+    );
+  }
+
+  List<IsarReceivable> _applyFilter(List<IsarReceivable> items) {
+    if (_filter == 'settled') {
+      return items.where((r) => _isSettled(r)).toList();
+    }
+    if (_filter == 'outstanding') {
+      return items.where((r) => !_isSettled(r)).toList();
+    }
+    return items;
+  }
+
+  bool _isSettled(IsarReceivable receivable) {
+    final idx = _debtorIndex(receivable);
+    if (idx == null) return false;
+    if (idx >= receivable.isPaid.length || idx >= receivable.isReceived.length) {
+      return false;
+    }
+    return receivable.isPaid[idx] && receivable.isReceived[idx];
+  }
+
+  int? _debtorIndex(IsarReceivable receivable) {
+    if (widget.debtorId != null) {
+      final idx = receivable.participants.indexOf(widget.debtorId!);
+      if (idx > 0) return idx;
+    }
+    return null;
+  }
+
+  Widget _filterChips() {
+    final filters = {
+      'all': 'All',
+      'outstanding': 'Outstanding',
+      'settled': 'Settled',
+    };
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Wrap(
+        spacing: 8,
+        children: filters.entries.map((entry) {
+          final selected = _filter == entry.key;
+          return ChoiceChip(
+            label: Text(entry.value),
+            selected: selected,
+            onSelected: (_) {
+              setState(() {
+                _filter = entry.key;
+              });
+            },
+          );
+        }).toList(),
       ),
     );
   }
@@ -217,9 +306,8 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
                 children: [
                   if (isCreator)
                     ElevatedButton.icon(
-                      onPressed: _isProcessing
-                          ? null
-                          : () => _deleteReceivable(receivable),
+                      onPressed:
+                          _isProcessing ? null : () => _showDeleteOptions(),
                       icon: Icon(Icons.delete, size: 16),
                       label: Text('Delete'),
                       style: ElevatedButton.styleFrom(
@@ -360,55 +448,12 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
     );
   }
 
-  Future<void> _deleteReceivable(IsarReceivable receivable) async {
-    final currentUserId = FirebaseAuthService().getCurrentUserId();
-    if (currentUserId == null ||
-        receivable.participants.isEmpty ||
-        receivable.participants.first != currentUserId) {
-      return;
-    }
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Delete Receivable'),
-        content: Text('Delete this receivable?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
+  Future<void> _markAsPaid(IsarReceivable receivable) async {
+    if (mounted) {
       setState(() {
         _isProcessing = true;
       });
-      final provider = Provider.of<ReceivableProvider>(context, listen: false);
-      await provider.deleteReceivable(
-        context: context,
-        receivableId: receivable.receivableId ?? '',
-      );
-      if (mounted) {
-        Navigator.pop(context);
-      }
-      if (mounted) {
-        setState(() {
-          _isProcessing = false;
-        });
-      }
     }
-  }
-
-  Future<void> _markAsPaid(IsarReceivable receivable) async {
-    setState(() {
-      _isProcessing = true;
-    });
     final provider = Provider.of<ReceivableProvider>(context, listen: false);
     final debtorIndex = await _findUserIndex(receivable);
     if (debtorIndex != null && debtorIndex < receivable.participants.length) {
@@ -419,11 +464,104 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
         userId: debtorId,
       );
     }
+    if (!mounted) return;
+    setState(() {
+      _isProcessing = false;
+    });
+  }
+
+  Future<void> _showDeleteOptions() async {
+    final currentUserId = FirebaseAuthService().getCurrentUserId();
+    if (currentUserId == null) return;
+    final isCreator = widget.receivables.isNotEmpty &&
+        widget.receivables.first.participants.isNotEmpty &&
+        widget.receivables.first.participants.first == currentUserId;
+    if (!isCreator) return;
+
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete options'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.delete_forever, color: Colors.red),
+              title: const Text("Delete entire receivable"),
+              subtitle: const Text("Removes this record for everyone."),
+              onTap: () => Navigator.pop(context, 'delete_all'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.person_remove, color: Colors.orange),
+              title: const Text("Remove this user from receivable"),
+              subtitle: Text("Removes only ${widget.userName} from this receivable."),
+              onTap: () => Navigator.pop(context, 'remove_user'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: const Text("Cancel"),
+          ),
+        ],
+      ),
+    );
+
+    if (choice == 'delete_all') {
+      await _deleteAllReceivables();
+    } else if (choice == 'remove_user') {
+      await _removeDebtorFromReceivables();
+    }
+  }
+
+  Future<void> _deleteAllReceivables() async {
+    if (_isProcessing) return;
     if (mounted) {
       setState(() {
-        _isProcessing = false;
+        _isProcessing = true;
       });
     }
+    final provider = Provider.of<ReceivableProvider>(context, listen: false);
+    for (final r in widget.receivables) {
+      await provider.deleteReceivable(
+        context: context,
+        receivableId: r.receivableId ?? '',
+      );
+    }
+    if (!mounted) return;
+    Navigator.pop(context);
+    setState(() {
+      _isProcessing = false;
+    });
+  }
+
+  Future<void> _removeDebtorFromReceivables() async {
+    if (_isProcessing) return;
+    if (mounted) {
+      setState(() {
+        _isProcessing = true;
+      });
+    }
+    final provider = Provider.of<ReceivableProvider>(context, listen: false);
+    for (final r in widget.receivables) {
+      final idx = await _findUserIndex(r);
+      if (idx != null && idx > 0) {
+        await provider.removeUserFromReceivable(
+          context: context,
+          receivableId: r.receivableId ?? '',
+          userIndex: idx,
+        );
+      }
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("User removed from receivable")),
+    );
+    Navigator.pop(context);
+    setState(() {
+      _isProcessing = false;
+    });
   }
 
   Future<Map<String, bool>> _getUserPaymentStatus(
@@ -472,18 +610,18 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
   }
 
   Future<double> _getUserAmount(IsarReceivable receivable) async {
-    for (int i = 0; i < receivable.participants.length; i++) {
-      final userId = receivable.participants[i];
-      final userService = UserService();
-      final user = await userService.fetchUserById(userId);
-      if (user?.userName == widget.userName) {
-        return i < receivable.rate.length ? receivable.rate[i] : 0.0;
-      }
+    final idx = await _findUserIndex(receivable);
+    if (idx != null && idx < receivable.rate.length) {
+      return receivable.rate[idx];
     }
     return 0.0;
   }
 
   Future<int?> _findUserIndex(IsarReceivable receivable) async {
+    if (widget.debtorId != null) {
+      final idx = receivable.participants.indexOf(widget.debtorId!);
+      if (idx != -1) return idx;
+    }
     for (int i = 0; i < receivable.participants.length; i++) {
       final userId = receivable.participants[i];
       final userService = UserService();

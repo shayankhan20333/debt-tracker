@@ -72,6 +72,7 @@ class _ReceivalbeScreenState extends State<ReceivalbeScreen> {
         if (amount > 0) {
           final entry = userData.putIfAbsent(userName, () {
             return {
+              'userId': userId,
               'outstanding': 0.0,
               'settled': 0.0,
               'receivableIds': <String>[],
@@ -140,24 +141,6 @@ class _ReceivalbeScreenState extends State<ReceivalbeScreen> {
               )
               .toList();
 
-          // if (users.isEmpty) {
-          //   return Column(
-          //     mainAxisAlignment: MainAxisAlignment.center,
-          //     children: [
-          //       TitleText(title: "No Receivables Available"),
-          //       TextButton(
-          //         onPressed: () {
-          //           Navigator.pushNamed(
-          //             context,
-          //             RecievableFormScreen.roatName,
-          //           );
-          //         },
-          //         child: const Text("Add Receivable"),
-          //       ),
-          //     ],
-          //   );
-          // }
-
           // Sort users by outstanding amount (highest first), then total
           users.sort((a, b) {
             final aOutstanding = userData[a]!['outstanding'] as double? ?? 0.0;
@@ -202,55 +185,38 @@ class _ReceivalbeScreenState extends State<ReceivalbeScreen> {
                   if (_filter == 'outstanding' && !hasOutstanding) return false;
                   return true;
                 }).toList();
+
                 if (filteredUsers.isEmpty) {
                   return [
                     _filterEmptyState(),
                   ];
                 }
+
                 return filteredUsers.map((userName) {
                   final outstanding =
                       userData[userName]!['outstanding'] as double? ?? 0.0;
-                  final settled =
-                      userData[userName]!['settled'] as double? ?? 0.0;
-                  final receivableIds =
-                      userData[userName]!['receivableIds'] as List<String>;
-                  final userImagePath =
-                      (userData[userName]!['userImagePath'] as String?) ?? '';
-                  final hasSettled = settled > 0;
-                  final hasOutstanding = outstanding > 0;
-                  if (_filter == 'settled' && !hasSettled) return const SizedBox();
-                  if (_filter == 'outstanding' && !hasOutstanding) {
-                    return const SizedBox();
-                  }
-                  final displayAmount =
-                      _filter == 'settled' ? settled : outstanding;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: customeListTile(
-                      size,
-                      userName,
-                      displayAmount,
-                      receivableIds,
-                      userImagePath,
-                      settledAmount: settled,
-                    ),
-                  );
-                }).toList();
-              }()),
-                final outstanding = userData[userName]!['outstanding'] as double? ?? 0.0;
-                final settled = userData[userName]!['settled'] as double? ?? 0.0;
+                final settled =
+                    userData[userName]!['settled'] as double? ?? 0.0;
                 final receivableIds =
                     userData[userName]!['receivableIds'] as List<String>;
                 final userImagePath =
                     (userData[userName]!['userImagePath'] as String?) ?? '';
+                final debtorId = userData[userName]!['userId'] as String?;
                 final hasSettled = settled > 0;
                 final hasOutstanding = outstanding > 0;
-                if (_filter == 'settled' && !hasSettled) return const SizedBox();
+                if (_filter == 'settled' && !hasSettled) {
+                  return const SizedBox();
+                }
                 if (_filter == 'outstanding' && !hasOutstanding) {
                   return const SizedBox();
                 }
-                final displayAmount =
-                    _filter == 'settled' ? settled : outstanding;
+                final displayAmount = _filter == 'settled'
+                    ? settled
+                    : _filter == 'outstanding'
+                        ? outstanding
+                        : (hasOutstanding ? outstanding : settled);
+                final forceSettled =
+                    _filter == 'settled' || (!hasOutstanding && hasSettled);
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: customeListTile(
@@ -260,9 +226,12 @@ class _ReceivalbeScreenState extends State<ReceivalbeScreen> {
                     receivableIds,
                     userImagePath,
                     settledAmount: settled,
+                    debtorId: debtorId,
+                    forceSettled: forceSettled,
                   ),
                 );
-              }),
+              }).toList();
+              }()),
             ],
           );
         },
@@ -392,10 +361,13 @@ class _ReceivalbeScreenState extends State<ReceivalbeScreen> {
     List<String> receivableIds,
     String userImagePath, {
     double settledAmount = 0,
+    String? debtorId,
+    bool forceSettled = false,
   }) {
     final hasOutstanding = totalAmount > 0;
     final hasSettled = settledAmount > 0;
-    final isSettledView = _filter == 'settled' || (!hasOutstanding && hasSettled);
+    final isSettledView =
+        forceSettled || _filter == 'settled' || (!hasOutstanding && hasSettled);
     final statusColor = isSettledView ? Colors.green : Colors.orangeAccent;
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -418,6 +390,8 @@ class _ReceivalbeScreenState extends State<ReceivalbeScreen> {
               return ReceivableDetailScreen(
                 receivables: userReceivables,
                 userName: userName,
+                debtorId: debtorId,
+                initialFilter: _filter,
               );
             },
           ),

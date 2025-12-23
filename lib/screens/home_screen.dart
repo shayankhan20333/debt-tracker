@@ -565,40 +565,41 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _emptyState() {
     return Padding(
-      padding: const EdgeInsets.only(top: 40),
-      child: Center(
-        child: Column(
-          children: [
-            Icon(Icons.assessment_outlined, size: 64, color: Colors.grey[600]),
-            const SizedBox(height: 12),
-            TitleText(title: "No data yet", fontSize: 20),
-            const SizedBox(height: 8),
-            SubtitleText(
-              title: "Add a receivable or refresh to get started.",
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.pushNamed(
-                      context,
-                      '/RecievableFormScreen',
-                    );
-                  },
-                  child: const Text("Add Receivable"),
-                ),
-                const SizedBox(width: 12),
-                TextButton(
-                  onPressed: loadData,
-                  child: const Text("Refresh"),
-                ),
-              ],
-            ),
-          ],
-        ),
+      padding: const EdgeInsets.only(top: 80),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.assessment_outlined, size: 64, color: Colors.grey[600]),
+          const SizedBox(height: 12),
+          TitleText(title: "No data yet", fontSize: 20),
+          const SizedBox(height: 8),
+          SubtitleText(
+            title: "Add a receivable or refresh to get started.",
+            color: Colors.grey[400],
+            textalign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pushNamed(
+                    context,
+                    '/RecievableFormScreen',
+                  );
+                },
+                child: const Text("Add Receivable"),
+              ),
+              const SizedBox(width: 12),
+              TextButton(
+                onPressed: loadData,
+                child: const Text("Refresh"),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -130,18 +130,23 @@ class _LoanScreenState extends State<LoanScreen> {
                 if (_filter == 'settled' && !hasSettled) {
                   return const SizedBox.shrink();
                 }
-                if (_filter == 'outstanding' && !hasOutstanding) {
+              if (_filter == 'outstanding' && !hasOutstanding) {
                   return const SizedBox.shrink();
                 }
+                final displayAmount =
+                    _filter == 'settled' ? settledAmount : totalOutstandingForLender;
+                final forceSettled =
+                    _filter == 'settled' || (!hasOutstanding && hasSettled);
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: customListTile(
                     size,
                     lenderName,
-                    totalOutstandingForLender,
+                    displayAmount,
                     loans,
                     userImagePath,
                     settledAmount: settledAmount,
+                    forceSettled: forceSettled,
                   ),
                 );
               }),
@@ -350,8 +355,9 @@ class _LoanScreenState extends State<LoanScreen> {
     List<Map<String, dynamic>> loans,
     String userImagePath, {
     double settledAmount = 0,
+    bool forceSettled = false,
   }) {
-    final settled = totalAmount <= 0 && settledAmount > 0;
+    final settled = forceSettled || (totalAmount <= 0 && settledAmount > 0);
     final statusColor = settled ? Colors.green : Colors.orangeAccent;
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -359,8 +365,11 @@ class _LoanScreenState extends State<LoanScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) =>
-                LoanDetailScreen(loans: loans, lenderName: lenderName),
+            builder: (context) => LoanDetailScreen(
+              loans: loans,
+              lenderName: lenderName,
+              initialFilter: _filter,
+            ),
           ),
         );
       },

@@ -6,6 +6,7 @@ import 'package:depth_tracker/DataBase/isar/isar_low_level_implementation.dart';
 import 'package:depth_tracker/model/user_model.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:isar/isar.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' as firestore;
 
 class UserService {
   static UserService? _instance;
@@ -78,25 +79,51 @@ class UserService {
     Isar isarInstance = await _localUserRepo.databaseInstance;
 
     List firebasedata = await _remoteUserRepo.usersLength();
-    int isarcount = await _localUserRepo.usersLength();
+    final users = firebasedata[1].map<IsarUserProfile>((doc) {
+      return IsarUserProfile()
+        ..userId = doc["userId"]
+        ..userName = doc['userName']
+        ..userEmail = doc['userEmail']
+        ..userContact = doc['userContact']
+        ..userImagePath = doc['userImagePath']
+        ..createdAt = DateTime.now();
+    }).toList();
 
-    if (firebasedata[0] != isarcount) {
-      // Fetch all users from Firebase
-      final users = firebasedata[1].map<IsarUserProfile>((doc) {
-        return IsarUserProfile()
-          ..userId = doc["userId"]
-          ..userName = doc['userName']
-          ..userEmail = doc['userEmail']
-          ..userContact = doc['userContact']
-          ..userImagePath = doc['userImagePath']
-          ..createdAt = DateTime.now();
-      }).toList();
-
-      await isarInstance.writeTxn(() async {
-        await isarInstance.isarUserProfiles.clear();
-        await isarInstance.isarUserProfiles.putAll(users);
-      });
-    }
+    await isarInstance.writeTxn(() async {
+      await isarInstance.isarUserProfiles.clear();
+      await isarInstance.isarUserProfiles.putAll(users);
+    });
     return await isarInstance.isarUserProfiles.where().findAll();
+  }
+
+  Stream<void> watchUsers() async* {
+    final isarInstance = await _localUserRepo.databaseInstance;
+    await for (final snapshot in firestore.FirebaseFirestore.instance
+        .collection('Users')
+        .snapshots()) {
+      final mapped = snapshot.docs.map<IsarUserProfile>((doc) {
+        final data = doc.data();
+        return IsarUserProfile()
+          ..userId = data['userId']?.toString() ?? ''
+          ..userName = data['userName']?.toString()
+          ..userEmail = data['userEmail']?.toString()
+          ..userContact = data['userContact']?.toString()
+          ..userImagePath = data['userImagePath']?.toString();
+      }).toList();
+      final remoteIds = mapped.map((u) => u.userId ?? '').toSet();
+      await isarInstance.writeTxn(() async {
+        final existing =
+            await isarInstance.collection<IsarUserProfile>().where().findAll();
+        final toDelete = existing
+            .where((u) => !remoteIds.contains(u.userId ?? ''))
+            .map((u) => u.id)
+            .toList();
+        if (toDelete.isNotEmpty) {
+          await isarInstance.collection<IsarUserProfile>().deleteAll(toDelete);
+        }
+        await isarInstance.collection<IsarUserProfile>().putAll(mapped);
+      });
+      yield null;
+    }
   }
 }

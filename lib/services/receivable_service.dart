@@ -103,8 +103,8 @@ class ReceivableService {
       final mapped = snapshot.docs.map<IsarReceivable>((doc) {
         final data = doc.data();
         final participants = List<String>.from(data['participants'] ?? []);
-        final createdAt =
-            _parseCreatedAt(data['createdAt'], data["id"]?.toString() ?? '');
+        final dataId = data["id"]?.toString() ?? doc.id;
+        final createdAt = _parseCreatedAt(data['createdAt'], dataId);
         final rates = _normalizeList<double>(
           List<double>.from(
             data['rate']?.map((r) => (r as num).toDouble()) ?? [],
@@ -127,7 +127,7 @@ class ReceivableService {
           false,
         );
         return IsarReceivable()
-          ..receivableId = data["id"]?.toString() ?? ''
+          ..receivableId = dataId
           ..participants = participants
           ..description = data['description']?.toString() ?? 'No Description'
           ..method = data['method']?.toString() ?? 'Unknown Method'
@@ -138,12 +138,12 @@ class ReceivableService {
       }).toList();
 
       await isar.writeTxn(() async {
-        await isar.collection<IsarReceivable>().putAll(mapped);
+        await isar.collection<IsarReceivable>().clear();
+        if (mapped.isNotEmpty) {
+          await isar.collection<IsarReceivable>().putAll(mapped);
+        }
       });
-      final deduped = {
-        for (final r in mapped) r.receivableId ?? r.id.toString(): r
-      }.values.toList();
-      return deduped;
+      return await isar.collection<IsarReceivable>().where().findAll();
     });
   }
 
@@ -222,14 +222,12 @@ class ReceivableService {
         }).toList();
 
         await isar.writeTxn(() async {
+          await isar.collection<IsarReceivable>().clear();
           await isar.collection<IsarReceivable>().putAll(receivables);
         });
-        final List<IsarReceivable> stored =
-            await isar.collection<IsarReceivable>().where().findAll();
-        final List<IsarReceivable> deduped = {
-          for (final r in stored) r.receivableId ?? r.id.toString(): r
-        }.values.toList();
-        return await _normalizeStoredReceivables(deduped);
+        return await _normalizeStoredReceivables(
+          await isar.collection<IsarReceivable>().where().findAll(),
+        );
       }
 
       final List<IsarReceivable> localReceivables =
@@ -331,12 +329,16 @@ class ReceivableService {
     final directSnap = await directRef.get();
     if (directSnap.exists) return directRef;
 
-    final fallback = await collection
-        .where('id', isEqualTo: receivableId)
-        .limit(1)
-        .get();
-    if (fallback.docs.isNotEmpty) {
-      return fallback.docs.first.reference;
+    // Fallback: legacy docs may store id as string or int field
+    final queries = <Object>[receivableId];
+    final parsed = int.tryParse(receivableId);
+    if (parsed != null) queries.add(parsed);
+
+    for (final q in queries) {
+      final snap = await collection.where('id', isEqualTo: q).limit(1).get();
+      if (snap.docs.isNotEmpty) {
+        return snap.docs.first.reference;
+      }
     }
     return null;
   }

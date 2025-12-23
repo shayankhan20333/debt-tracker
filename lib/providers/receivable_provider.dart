@@ -86,6 +86,9 @@ class ReceivableProvider with ChangeNotifier {
     required String receivableId,
   }) async {
     await _receivableService.deleteReceivable(receivableId);
+    _receivables.removeWhere(
+      (r) => (r.receivableId ?? r.id.toString()) == receivableId,
+    );
     if (!context.mounted) return;
     await getAllReceivables(context: context);
   }
