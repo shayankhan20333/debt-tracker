@@ -5,6 +5,7 @@ import 'package:depth_tracker/model/receivable_model.dart';
 import 'package:depth_tracker/model/user_model.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class FirebaseUserRepository implements IUserRepository {
@@ -273,24 +274,16 @@ class FirebaseAuthService implements IAuthService {
   }
 
   @override
-  Future<String> signInWithGoogle() async {
+  Future<UserCredential?> signInWithGoogle() async {
     try {
-      final googleSignIn = GoogleSignIn(
-        scopes: ['email'],
-      );
-      
-      await googleSignIn.signOut();
+      final googleSignIn = GoogleSignIn(scopes: ['email']);
       final googleUser = await googleSignIn.signIn();
 
       if (googleUser == null) {
-        return "Login cancelled";
+        return null;
       }
 
       final googleAuth = await googleUser.authentication;
-
-      if (googleAuth.accessToken == null || googleAuth.idToken == null) {
-        return "Google sign-in failed: Missing tokens";
-      }
 
       final credential = await _auth.signInWithCredential(
         GoogleAuthProvider.credential(
@@ -299,13 +292,17 @@ class FirebaseAuthService implements IAuthService {
         ),
       );
 
-      if (credential.additionalUserInfo?.isNewUser == true) {
-        return "new user";
-      }
-
-      return "old user";
+      return credential;
+    } on PlatformException catch (e) {
+      throw FirebaseAuthException(
+        code: e.code,
+        message: e.message,
+      );
     } catch (e) {
-      return "Google sign-in failed: ${e.toString()}";
+      throw FirebaseAuthException(
+        code: 'google-sign-in-failed',
+        message: e.toString(),
+      );
     }
   }
 
@@ -317,7 +314,11 @@ class FirebaseAuthService implements IAuthService {
   @override
   Future<void> signOut() async {
     await _auth.signOut();
-    await GoogleSignIn().signOut();
+    try {
+      await GoogleSignIn().signOut();
+    } catch (_) {
+      // Ignore Google sign-out errors
+    }
   }
 
   @override

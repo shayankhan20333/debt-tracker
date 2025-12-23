@@ -1,6 +1,7 @@
 import 'package:depth_tracker/DataBase/isar/isar_collections/isar_collections.dart';
 import 'package:depth_tracker/providers/receivable_provider.dart';
 import 'package:depth_tracker/services/user_services.dart';
+import 'package:depth_tracker/DataBase/firebase/firebase_low_level_classes.dart';
 import 'package:depth_tracker/widgets/my_app_Bar.dart';
 import 'package:depth_tracker/widgets/subtitle_text.dart';
 import 'package:depth_tracker/widgets/title_text.dart';
@@ -26,10 +27,18 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final totalOutstanding = widget.receivables.fold<double>(
+      0,
+      (prev, r) =>
+          prev +
+          r.rate.asMap().entries
+              .where((e) => e.key > 0)
+              .fold<double>(0, (p, e) => p + e.value),
+    );
     return Scaffold(
       appBar: MyAppBar(
-        title: "${widget.userName}'s Receivables",
-        hasTitleDecoration: true,
+        title: "Receivable Details",
+        hasTitleInCenter: true,
       ),
       body: Stack(
         children: [
@@ -53,9 +62,15 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
 
                   return ListView.builder(
                     padding: EdgeInsets.all(16),
-                    itemCount: sortedReceivables.length,
+                    itemCount: sortedReceivables.length + 1,
                     itemBuilder: (context, index) {
-                      return receivableCard(sortedReceivables[index]);
+                      if (index == 0) {
+                        return _detailHeader(
+                          outstanding: totalOutstanding,
+                          count: sortedReceivables.length,
+                        );
+                      }
+                      return receivableCard(sortedReceivables[index - 1]);
                     },
                   );
                 },
@@ -91,6 +106,10 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
     String formattedDateTime,
     double userAmount,
   ) {
+    final currentUserId = FirebaseAuthService().getCurrentUserId();
+    final bool isCreator = receivable.participants.isNotEmpty &&
+        receivable.participants.first == currentUserId;
+
     return Card(
       margin: EdgeInsets.only(bottom: 16),
       elevation: 4,
@@ -99,60 +118,68 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           gradient: LinearGradient(
-            colors: [Colors.grey[800]!, Colors.grey[900]!],
+            colors: [Colors.grey[850]!, Colors.grey[900]!],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
         ),
         child: Padding(
-          padding: EdgeInsets.all(20),
+          padding: EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Icon(Icons.description, color: Colors.blue, size: 20),
-                  SizedBox(width: 8),
                   Expanded(
                     child: TitleText(
                       title: receivable.description ?? 'No Description',
                       fontSize: 18,
                     ),
                   ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: SubtitleText(
+                      title: formattedDateTime,
+                      fontSize: 11,
+                    ),
+                  ),
                 ],
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 10),
               Row(
                 children: [
-                  Icon(Icons.access_time, color: Colors.green, size: 18),
-                  SizedBox(width: 8),
-                  SubtitleText(title: formattedDateTime, fontSize: 14),
-                ],
-              ),
-              SizedBox(height: 8),
-              Row(
-                children: [
-                  Icon(Icons.currency_rupee, color: Colors.orange, size: 18),
-                  SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: SubtitleText(
+                      title: receivable.method ?? 'Unknown Method',
+                      fontSize: 12,
+                      color: Colors.blue,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
                   SubtitleText(
-                    title: 'Rs $userAmount',
+                    title: "Rs $userAmount",
                     fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                    color: Colors.orangeAccent,
                   ),
                 ],
               ),
-              SizedBox(height: 8),
-              Row(
-                children: [
-                  Icon(Icons.payment, color: Colors.purple, size: 18),
-                  SizedBox(width: 8),
-                  SubtitleText(
-                    title: receivable.method ?? 'Unknown Method',
-                    fontSize: 14,
-                  ),
-                ],
-              ),
-              SizedBox(height: 8),
+              const SizedBox(height: 10),
               FutureBuilder<Map<String, bool>>(
                 key: ValueKey(
                   '${receivable.receivableId ?? ''}_${receivable.isReceived}_${receivable.isPaid}',
@@ -162,65 +189,48 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
                   final status =
                       snapshot.data ?? {'isReceived': false, 'isPaid': false};
                   final settled = status['isReceived']! && status['isPaid']!;
-                  return Column(
+                  return Row(
                     children: [
-                      Row(
-                        children: [
-                          Icon(Icons.receipt, color: Colors.blue, size: 16),
-                          SizedBox(width: 8),
-                          SubtitleText(
-                            title:
-                                'You: ${status['isReceived']! ? 'Received' : 'Not Received'}',
-                            fontSize: 14,
-                            color: status['isReceived']!
-                                ? Colors.green
-                                : Colors.orange,
-                          ),
-                        ],
+                      _statusChip(
+                        label:
+                            "Received: ${status['isReceived']! ? 'Yes' : 'No'}",
+                        color: status['isReceived']!
+                            ? Colors.green
+                            : Colors.orange,
                       ),
-                      SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(Icons.payment, color: Colors.purple, size: 16),
-                          SizedBox(width: 8),
-                          SubtitleText(
-                            title:
-                                '${widget.userName}: ${status['isPaid']! ? 'Paid' : 'Not Paid'}',
-                            fontSize: 14,
-                            color: status['isPaid']!
-                                ? Colors.green
-                                : Colors.orange,
-                          ),
-                        ],
+                      const SizedBox(width: 8),
+                      _statusChip(
+                        label: "Paid: ${status['isPaid']! ? 'Yes' : 'No'}",
+                        color: status['isPaid']! ? Colors.green : Colors.orange,
                       ),
-                      SizedBox(height: 4),
-                      SubtitleText(
-                        title: settled ? 'Settled' : 'Outstanding',
-                        fontSize: 12,
-                        color: settled ? Colors.green : Colors.orange,
-                      ),
+                      if (settled) ...[
+                        const SizedBox(width: 8),
+                        _statusChip(label: "Settled", color: Colors.green),
+                      ],
                     ],
                   );
                 },
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  ElevatedButton.icon(
-                    onPressed:
-                        _isProcessing ? null : () => _deleteReceivable(receivable),
-                    icon: Icon(Icons.delete, size: 16),
-                    label: Text('Delete'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
+                  if (isCreator)
+                    ElevatedButton.icon(
+                      onPressed: _isProcessing
+                          ? null
+                          : () => _deleteReceivable(receivable),
+                      icon: Icon(Icons.delete, size: 16),
+                      label: Text('Delete'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                       ),
                     ),
-                  ),
                   FutureBuilder<Map<String, bool>>(
                     key: ValueKey(
                       '${receivable.receivableId ?? ''}_${receivable.isReceived}',
@@ -234,7 +244,7 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
                       if (settled) return SizedBox.shrink();
                       return Row(
                         children: [
-                          SizedBox(width: 8),
+                          const SizedBox(width: 8),
                           ElevatedButton.icon(
                             onPressed: _isProcessing
                                 ? null
@@ -263,7 +273,100 @@ class _ReceivableDetailScreenState extends State<ReceivableDetailScreen> {
     );
   }
 
+  Widget _statusChip({required String label, required Color color}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.4)),
+      ),
+      child: SubtitleText(
+        title: label,
+        fontSize: 11,
+        color: color,
+      ),
+    );
+  }
+
+  Widget _detailHeader({required double outstanding, required int count}) {
+    final colors = [
+      Colors.blue.withOpacity(0.85),
+      Colors.purple.withOpacity(0.75),
+    ];
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: colors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TitleText(
+                title: widget.userName,
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+              const SizedBox(height: 6),
+              SubtitleText(
+                title: "$count records",
+                color: Colors.white70,
+              ),
+            ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              TitleText(
+                title: "Rs ${outstanding.toStringAsFixed(0)}",
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+              const SizedBox(height: 6),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  children: const [
+                    Icon(Icons.assignment, size: 14, color: Colors.white),
+                    SizedBox(width: 6),
+                    SubtitleText(
+                      title: "Details",
+                      fontSize: 11,
+                      color: Colors.white,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _deleteReceivable(IsarReceivable receivable) async {
+    final currentUserId = FirebaseAuthService().getCurrentUserId();
+    if (currentUserId == null ||
+        receivable.participants.isEmpty ||
+        receivable.participants.first != currentUserId) {
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(

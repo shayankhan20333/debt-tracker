@@ -1,6 +1,7 @@
 import 'package:depth_tracker/model/loan_model.dart';
 import 'package:depth_tracker/model/receivable_model.dart';
 import 'package:depth_tracker/model/user_model.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 abstract class IUserRepository<T> {
   Future<T> get databaseInstance;
@@ -34,7 +35,7 @@ abstract class IAuthService {
     String password,
   );
   Future<String?> signInWithEmail(String email, String password);
-  Future<String?> signInWithGoogle();
+  Future<UserCredential?> signInWithGoogle();
   Future<void> signOut();
   String? getCurrentUserId();
   Future<void> sendPasswordReset(String email);

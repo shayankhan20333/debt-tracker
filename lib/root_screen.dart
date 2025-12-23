@@ -61,37 +61,78 @@ class _RootScreenState extends State<RootScreen> {
               ),
             )
           : null,
-      bottomNavigationBar: NavigationBar(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        selectedIndex: currentScreen,
-        onDestinationSelected: (value) {
-          setState(() {
-            currentScreen = value;
-          });
-          pageViewController.jumpToPage(currentScreen);
-        },
-        destinations: [
-          NavigationDestination(
-            selectedIcon: Icon(IconlyLight.home),
-            icon: Icon(Icons.home_filled),
-            label: "Home",
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 12,
+              offset: const Offset(0, -4),
+            ),
+          ],
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(18),
+            topRight: Radius.circular(18),
           ),
-          NavigationDestination(
-            selectedIcon: Icon(Icons.receipt_outlined),
-            icon: Icon(Icons.receipt_sharp),
-            label: "Receivables",
+        ),
+        child: NavigationBarTheme(
+          data: NavigationBarThemeData(
+            height: 72,
+            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+            indicatorColor:
+                Theme.of(context).colorScheme.primaryContainer.withOpacity(0.6),
+            iconTheme: MaterialStateProperty.resolveWith(
+              (states) => IconThemeData(
+                color: states.contains(MaterialState.selected)
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+              ),
+            ),
+            labelTextStyle: MaterialStateProperty.resolveWith(
+              (states) => TextStyle(
+                fontWeight:
+                    states.contains(MaterialState.selected) ? FontWeight.w700 : FontWeight.w500,
+                color: states.contains(MaterialState.selected)
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+              ),
+            ),
           ),
-          NavigationDestination(
-            selectedIcon: Icon(Icons.whatshot_outlined),
-            icon: Icon(Icons.whatshot),
-            label: "Loan",
+          child: NavigationBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            selectedIndex: currentScreen,
+            onDestinationSelected: (value) {
+              setState(() {
+                currentScreen = value;
+              });
+              pageViewController.jumpToPage(currentScreen);
+            },
+            destinations: const [
+              NavigationDestination(
+                selectedIcon: Icon(IconlyLight.home),
+                icon: Icon(Icons.home_filled),
+                label: "Home",
+              ),
+              NavigationDestination(
+                selectedIcon: Icon(Icons.receipt_outlined),
+                icon: Icon(Icons.receipt_sharp),
+                label: "Receivables",
+              ),
+              NavigationDestination(
+                selectedIcon: Icon(Icons.whatshot_outlined),
+                icon: Icon(Icons.whatshot),
+                label: "Loan",
+              ),
+              NavigationDestination(
+                selectedIcon: Icon(IconlyBold.profile),
+                icon: Icon(IconlyLight.profile),
+                label: "Profile",
+              ),
+            ],
           ),
-          NavigationDestination(
-            selectedIcon: Icon(IconlyBold.profile),
-            icon: Icon(IconlyLight.profile),
-            label: "Profile",
-          ),
-        ],
+        ),
       ),
     );
   }

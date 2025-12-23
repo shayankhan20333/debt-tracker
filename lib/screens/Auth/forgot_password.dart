@@ -3,7 +3,7 @@ import 'package:depth_tracker/constant/validator.dart';
 import 'package:depth_tracker/screens/Auth/login_screen.dart';
 import 'package:depth_tracker/screens/loading_manager.dart';
 import 'package:depth_tracker/services/assets_manager.dart';
-import 'package:depth_tracker/widgets/app_name_text.dart';
+import 'package:depth_tracker/widgets/my_app_Bar.dart';
 import 'package:depth_tracker/widgets/subtitle_text.dart';
 import 'package:depth_tracker/widgets/title_text.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -121,9 +121,10 @@ class _ForgotPasswordState extends State<ForgotPassword> {
     Size size = MediaQuery.of(context).size;
 
     return Scaffold(
-      appBar: AppBar(
-        title: AppNameText(title: "Debt Tracker"),
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: const MyAppBar(
+        title: "Forgot Password",
+        hasTitleInCenter: true,
+        showBack: true,
       ),
       body: LoadingManager(
         isLoading: isLoading,

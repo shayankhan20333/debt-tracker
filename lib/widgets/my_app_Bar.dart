@@ -1,7 +1,7 @@
-import 'package:depth_tracker/services/assets_manager.dart';
 import 'package:depth_tracker/widgets/app_name_text.dart';
 import 'package:depth_tracker/widgets/title_text.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class MyAppBar extends StatelessWidget implements PreferredSizeWidget {
   const MyAppBar({
@@ -15,6 +15,7 @@ class MyAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.hasAction = false,
     this.actionIcon,
     this.actionFunction,
+    this.showBack = false,
   });
 
   final String title;
@@ -26,42 +27,76 @@ class MyAppBar extends StatelessWidget implements PreferredSizeWidget {
   final bool hasAction;
   final IconData? actionIcon;
   final Function? actionFunction;
+  final bool showBack;
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 
   @override
   Widget build(BuildContext context) {
-    return AppBar(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      leading: hasLeading
-          ? Padding(
-              padding: const EdgeInsets.only(top: 8, left: 8),
-              child: InkWell(
-                onTap: () {
-                  leadingfunction!();
-                },
-                child: Image.asset(AssetsManager.emptySearch),
-              ),
-            )
-          : null,
-      title: hasTitleDecoration
-          ? AppNameText(title: title)
-          : FittedBox(child: TitleText(title: title)),
-      centerTitle: hasTitleInCenter,
-      actions: hasAction
-          ? [
-              Padding(
-                padding: const EdgeInsets.only(top: 10, right: 10),
-                child: InkWell(
-                  onTap: () {
-                    actionFunction!();
-                  },
-                  child: Icon(actionIcon),
+    final theme = Theme.of(context);
+    final shouldShowBack =
+        showBack || hasLeading || Navigator.of(context).canPop();
+    final gradient = LinearGradient(
+      colors: [
+        theme.colorScheme.primary.withOpacity(0.9),
+        theme.colorScheme.secondary.withOpacity(0.85),
+      ],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    );
+
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(kToolbarHeight + 8),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: gradient,
+          borderRadius: const BorderRadius.only(
+            bottomLeft: Radius.circular(18),
+            bottomRight: Radius.circular(18),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: hasTitleInCenter,
+          titleSpacing: 12,
+          systemOverlayStyle: SystemUiOverlayStyle.light,
+          leading: shouldShowBack
+              ? IconButton(
+                  onPressed: () =>
+                      leadingfunction?.call() ?? Navigator.maybePop(context),
+                  icon: Icon(
+                    leadingIcon ?? Icons.arrow_back_ios_new_rounded,
+                    color: Colors.white,
+                  ),
+                )
+              : null,
+          title: hasTitleDecoration
+              ? AppNameText(title: title, isAppBar: true)
+              : TitleText(
+                  title: title,
+                  color: Colors.white,
+                  fontSize: 18,
+                  maxLength: 1,
                 ),
-              ),
-            ]
-          : null,
+          actions: hasAction
+              ? [
+                  IconButton(
+                    onPressed: () => actionFunction?.call(),
+                    icon: Icon(actionIcon, color: Colors.white),
+                  ),
+                ]
+              : null,
+        ),
+      ),
     );
   }
 }

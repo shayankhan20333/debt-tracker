@@ -184,13 +184,13 @@ class IsarReceivableRepository implements IReceivableRepository {
 
   @override
   Future<int> receivablesLength() async {
-    final isar = await IsarService.getInstance();
-    return await isar.isarReceivables.count();
+    final Isar isar = await IsarService.getInstance();
+    return await isar.collection<IsarReceivable>().count();
   }
 
   @override
   Future<void> addReceivable(ReceivableModel receivable) async {
-    final isar = await IsarService.getInstance();
+    final Isar isar = await IsarService.getInstance();
     final isarReceivable = IsarReceivable()
       ..receivableId = receivable.id.toString()
       ..participants = receivable.participants
@@ -202,14 +202,15 @@ class IsarReceivableRepository implements IReceivableRepository {
       ..createdAt = receivable.createdAt.toDate();
 
     await isar.writeTxn(() async {
-      await isar.isarReceivables.put(isarReceivable);
+      await isar.collection<IsarReceivable>().put(isarReceivable);
     });
   }
 
   @override
   Future<List<ReceivableModel>> getReceivables(String userId) async {
-    final isar = await IsarService.getInstance();
-    final isarReceivables = await isar.isarReceivables.where().findAll();
+    final Isar isar = await IsarService.getInstance();
+    final isarReceivables =
+        await isar.collection<IsarReceivable>().where().findAll();
 
     return isarReceivables
         .map(
@@ -231,8 +232,8 @@ class IsarReceivableRepository implements IReceivableRepository {
 
   @override
   Future<void> updateReceivable(String receivableId, List<bool> isPaid) async {
-    final isar = await IsarService.getInstance();
-    final receivable = await isar.isarReceivables
+    final Isar isar = await IsarService.getInstance();
+    final receivable = await isar.collection<IsarReceivable>()
         .filter()
         .receivableIdEqualTo(receivableId)
         .findFirst();
@@ -241,22 +242,22 @@ class IsarReceivableRepository implements IReceivableRepository {
       receivable.isPaid = isPaid;
 
       await isar.writeTxn(() async {
-        await isar.isarReceivables.put(receivable);
+        await isar.collection<IsarReceivable>().put(receivable);
       });
     }
   }
 
   @override
   Future<void> deleteReceivable(String receivableId) async {
-    final isar = await IsarService.getInstance();
-    final receivable = await isar.isarReceivables
+    final Isar isar = await IsarService.getInstance();
+    final receivable = await isar.collection<IsarReceivable>()
         .filter()
         .receivableIdEqualTo(receivableId)
         .findFirst();
 
     if (receivable != null) {
       await isar.writeTxn(() async {
-        await isar.isarReceivables.delete(receivable.id);
+        await isar.collection<IsarReceivable>().delete(receivable.id);
       });
     }
   }

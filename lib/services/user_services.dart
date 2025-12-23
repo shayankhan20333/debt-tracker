@@ -42,12 +42,12 @@ class UserService {
   }
 
   Future<void> clearLocalCache() async {
-    final isar = await _localUserRepo.databaseInstance;
+    final Isar isar = await _localUserRepo.databaseInstance;
     await isar.writeTxn(() async {
-      await isar.isarUserProfiles.clear();
-      await isar.isarReceivables.clear();
-      await isar.isarLoans.clear();
-      await isar.isarStatuss.clear();
+      await isar.collection<IsarUserProfile>().clear();
+      await isar.collection<IsarReceivable>().clear();
+      await isar.collection<IsarLoan>().clear();
+      await isar.collection<IsarStatus>().clear();
     });
   }
 

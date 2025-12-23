@@ -7,7 +7,7 @@ import 'package:depth_tracker/screens/Auth/forgot_password.dart';
 import 'package:depth_tracker/screens/Auth/register_screen.dart';
 import 'package:depth_tracker/screens/loading_manager.dart';
 import 'package:depth_tracker/services/user_services.dart';
-import 'package:depth_tracker/widgets/app_name_text.dart';
+import 'package:depth_tracker/widgets/my_app_Bar.dart';
 import 'package:depth_tracker/widgets/subtitle_text.dart';
 import 'package:depth_tracker/widgets/title_text.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -53,6 +53,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
   String _mapAuthError(String code) {
     switch (code) {
+      case '10':
+      case '12500':
+      case 'DEVELOPER_ERROR':
+      case 'developer_error':
+      case 'google-sign-in-failed':
+        return 'Google Sign-In is not configured for this build. Add SHA-1/SHA-256 for com.example.depth_tracker in Firebase, then download the updated google-services.json.';
       case 'user-not-found':
         return 'No account found for that email.';
       case 'wrong-password':
@@ -102,9 +108,11 @@ class _LoginScreenState extends State<LoginScreen> {
     final bool isValid = _formkey.currentState!.validate();
     FocusScope.of(context).unfocus();
     if (!isValid) return;
-    setState(() {
-      isLoading = true;
-    });
+    if (mounted) {
+      setState(() {
+        isLoading = true;
+      });
+    }
 
     try {
       final userId = await firebaseUser.signInWithEmail(
@@ -133,33 +141,41 @@ class _LoginScreenState extends State<LoginScreen> {
         (route) => false,
       );
     } on FirebaseAuthException catch (e) {
-      _showSnack(_mapAuthError(e.code), isError: true);
-    } catch (error) {
-      _showSnack("Account not found", isError: true);
-    } finally {
       if (mounted) {
-        setState(() {
-          isLoading = false;
-        });
+        _showSnack(_mapAuthError(e.code), isError: true);
       }
+    } catch (error) {
+      if (mounted) {
+        _showSnack("Account not found", isError: true);
+      }
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        isLoading = false;
+      });
     }
   }
 
   Future<void> _googleSignIn() async {
     if (isLoading) return;
-    setState(() {
-      isLoading = true;
-    });
+    if (mounted) {
+      setState(() {
+        isLoading = true;
+      });
+    }
     try {
-      final userInfo = await firebaseUser.signInWithGoogle();
+      final userCredential = await firebaseUser.signInWithGoogle();
 
-      if (userInfo == "Login cancelled") {
-        _showSnack(userInfo);
-      } else if (userInfo == "Google sign-in failed: Missing tokens") {
-        _showSnack(userInfo, isError: true);
-      } else if (userInfo == "new user") {
-        final User user = _auth.currentUser!;
-        userService.createUser(
+      final user = userCredential?.user;
+      if (user == null) {
+        if (mounted) {
+          _showSnack("Login cancelled");
+        }
+        return;
+      }
+
+      if (userCredential?.additionalUserInfo?.isNewUser == true) {
+        await userService.createUser(
           UserModel(
             userId: user.uid,
             userName: user.displayName ?? "Unknown",
@@ -171,18 +187,24 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
       await Fluttertoast.showToast(msg: "Login Successful");
-      if (mounted) {
-        Navigator.pushNamedAndRemoveUntil(
-          context,
-          RootScreen.routeName,
-          (route) => false,
-        );
-      }
+      if (!mounted) return;
+      await Navigator.pushNamedAndRemoveUntil(
+        context,
+        RootScreen.routeName,
+        (route) => false,
+      );
     } on FirebaseAuthException catch (error) {
-      _showSnack(_mapAuthError(error.code), isError: true);
-  } catch (error) {
-      _showSnack(error.toString(), isError: true);
+      final code = error.code;
+      final message = error.message ?? _mapAuthError(code);
+      if (mounted) {
+        _showSnack(message, isError: true);
+      }
+    } catch (error) {
+      if (mounted) {
+        _showSnack(error.toString(), isError: true);
+      }
     } finally {
+      if (!mounted) return;
       setState(() {
         isLoading = false;
       });
@@ -192,12 +214,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: AppNameText(title: "Debt Tracker"),
-        centerTitle: true,
-        toolbarHeight: kToolbarHeight * 4,
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      ),
+      appBar: const MyAppBar(title: "Login", hasTitleInCenter: true),
       body: LoadingManager(
         isLoading: isLoading,
         child: SingleChildScrollView(

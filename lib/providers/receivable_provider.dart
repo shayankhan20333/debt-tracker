@@ -15,6 +15,15 @@ class ReceivableProvider with ChangeNotifier {
 
   List<IsarReceivable> get getReceivables => _receivables;
 
+  List<IsarReceivable> _dedupeById(List<IsarReceivable> items) {
+    final Map<String, IsarReceivable> byId = {};
+    for (final item in items) {
+      final id = item.receivableId ?? item.id.toString();
+      byId[id] = item;
+    }
+    return byId.values.toList();
+  }
+
   Future<void> createReceivable({
     required BuildContext context,
     required ReceivableModel receivable,
@@ -29,7 +38,8 @@ class ReceivableProvider with ChangeNotifier {
   }) async {
     try {
       await _receivableService.initializeDatabase();
-      _receivables = await _receivableService.fetchAllReceivables();
+      _receivables =
+          _dedupeById(await _receivableService.fetchAllReceivables());
       notifyListeners();
       return _receivables;
     } catch (e) {
@@ -45,7 +55,7 @@ class ReceivableProvider with ChangeNotifier {
     _subscription?.cancel();
     _subscription = _receivableService.watchReceivables().listen(
       (receivables) {
-        _receivables = receivables;
+        _receivables = _dedupeById(receivables);
         notifyListeners();
       },
     );

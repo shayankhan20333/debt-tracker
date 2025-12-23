@@ -17,6 +17,9 @@ class LoanScreen extends StatefulWidget {
 }
 
 class _LoanScreenState extends State<LoanScreen> {
+  String _searchQuery = '';
+  String _filter = 'all';
+
   @override
   void initState() {
     super.initState();
@@ -65,35 +68,84 @@ class _LoanScreenState extends State<LoanScreen> {
           final lenderData = snapshot.data ?? {};
           final lenders = lenderData.keys.toList();
 
-          if (lenders.isEmpty) {
-            return Center(child: TitleText(title: "No Loans Available"));
-          }
-
-          // Sort lenders by total amount (highest first)
+          // Sort lenders by outstanding amount (highest first)
           lenders.sort((a, b) {
-            final aAmount = lenderData[a]!['totalAmount'] as double;
-            final bAmount = lenderData[b]!['totalAmount'] as double;
+            final aAmount = lenderData[a]!['outstandingAmount'] as double;
+            final bAmount = lenderData[b]!['outstandingAmount'] as double;
             return bAmount.compareTo(aAmount);
           });
 
-          return ListView.builder(
-            itemCount: lenders.length,
-            itemBuilder: (context, index) {
-              final lenderName = lenders[index];
-              final totalAmount = lenderData[lenderName]!['totalAmount'];
-              final loans =
-                  lenderData[lenderName]!['loans']
-                      as List<Map<String, dynamic>>;
-              final userImagePath =
-                  (lenderData[lenderName]!['userImagePath'] as String?) ?? '';
-              return customListTile(
-                size,
-                lenderName,
-                totalAmount,
-                loans,
-                userImagePath,
-              );
-            },
+          final filteredLenders = lenders.where((lenderId) {
+            final displayName =
+                lenderData[lenderId]!['lenderName'] as String? ?? lenderId;
+            final matchesSearch = displayName
+                .toLowerCase()
+                .contains(_searchQuery.toLowerCase());
+            final outstanding =
+                (lenderData[lenderId]!['outstandingAmount'] as double? ?? 0);
+            final settled =
+                (lenderData[lenderId]!['settledAmount'] as double? ?? 0);
+            final hasSettled = settled > 0;
+            final hasOutstanding = outstanding > 0;
+            if (_filter == 'settled' && !hasSettled) return false;
+            if (_filter == 'outstanding' && !hasOutstanding) return false;
+            return matchesSearch;
+          }).toList();
+
+          final totalOutstanding = lenderData.values.fold<double>(
+            0,
+            (prev, value) =>
+                prev + ((value['outstandingAmount'] as double?) ?? 0.0),
+          );
+
+          return ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            children: [
+              _summaryHeader(
+                totalAmount: totalOutstanding,
+                count: lenders.length,
+              ),
+              const SizedBox(height: 12),
+              _filters(),
+              const SizedBox(height: 12),
+              _searchBar(),
+              const SizedBox(height: 12),
+              if (filteredLenders.isEmpty)
+                _filterEmptyState(),
+              ...filteredLenders.map((lenderId) {
+                final double totalOutstandingForLender =
+                    (lenderData[lenderId]!['outstandingAmount'] as double?) ??
+                        0.0;
+                final double settledAmount =
+                    (lenderData[lenderId]!['settledAmount'] as double?) ?? 0.0;
+                final loans =
+                    lenderData[lenderId]!['loans']
+                        as List<Map<String, dynamic>>;
+                final userImagePath =
+                    (lenderData[lenderId]!['userImagePath'] as String?) ?? '';
+                final lenderName =
+                    lenderData[lenderId]!['lenderName'] as String? ?? lenderId;
+                final hasSettled = settledAmount > 0;
+                final hasOutstanding = totalOutstandingForLender > 0;
+                if (_filter == 'settled' && !hasSettled) {
+                  return const SizedBox.shrink();
+                }
+                if (_filter == 'outstanding' && !hasOutstanding) {
+                  return const SizedBox.shrink();
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: customListTile(
+                    size,
+                    lenderName,
+                    totalOutstandingForLender,
+                    loans,
+                    userImagePath,
+                    settledAmount: settledAmount,
+                  ),
+                );
+              }),
+            ],
           );
         },
       ),
@@ -115,76 +167,58 @@ class _LoanScreenState extends State<LoanScreen> {
       for (var receivable in receivables) {
         if (receivable.participants.isEmpty) continue;
 
-        // Check if current user is in participants (but not the first one - creator)
-        bool isCurrentUserParticipant = false;
-        int currentUserIndex = -1;
+        final participants = receivable.participants;
+        final debtorIndex = participants.indexOf(currentUserId);
 
-        for (int i = 0; i < receivable.participants.length; i++) {
-          if (receivable.participants[i] == currentUserId) {
-            isCurrentUserParticipant = true;
-            currentUserIndex = i;
-            break;
-          }
-        }
+        // Loans: current user must be a debtor (index > 0)
+        if (debtorIndex <= 0) continue;
 
-        // If current user is not a participant, skip
-        if (!isCurrentUserParticipant) continue;
-
-        // If current user is the first participant (creator), skip - they don't owe money to themselves
-        if (currentUserIndex == 0) {
+        // Ensure arrays are aligned
+        if (receivable.rate.length <= debtorIndex ||
+            receivable.isPaid.length <= debtorIndex ||
+            receivable.isReceived.length <= debtorIndex) {
           continue;
         }
 
-        // Current user owes money - find who they owe to (the creator - first participant)
-        final creatorId = receivable.participants[0];
-        final creatorUser = await userService.fetchUserById(creatorId);
-        final creatorName = creatorUser?.userName ?? 'Unknown';
+        final lenderId = participants[0];
+        final creatorUser = await userService.fetchUserById(lenderId);
+        final lenderName = creatorUser?.userName ?? lenderId;
 
-        // Get the amount current user owes
-        final amountOwed = currentUserIndex < receivable.rate.length
-            ? receivable.rate[currentUserIndex]
-            : 0.0;
-
-        final paid = currentUserIndex < receivable.isPaid.length
-            ? receivable.isPaid[currentUserIndex]
-            : false;
-        final received = currentUserIndex < receivable.isReceived.length
-            ? receivable.isReceived[currentUserIndex]
-            : false;
+        final amountOwed =
+            (receivable.rate[debtorIndex] as num?)?.toDouble() ?? 0.0;
+        final paid = receivable.isPaid[debtorIndex];
+        final received = receivable.isReceived[debtorIndex];
         final settled = paid && received;
 
-        if (amountOwed > 0 && !settled) {
-          if (lenderData.containsKey(creatorName)) {
-            lenderData[creatorName]!['totalAmount'] =
-                (lenderData[creatorName]!['totalAmount'] as double) +
-                amountOwed;
-            (lenderData[creatorName]!['loans'] as List<Map<String, dynamic>>)
-                .add(<String, dynamic>{
-                  'receivableId': receivable.receivableId,
-                  'description': receivable.description,
-                  'amount': amountOwed,
-                  'method': receivable.method,
-                  'createdAt': receivable.createdAt ?? DateTime.now(),
-                  'isPaid': paid,
-                  'isReceived': received,
-                });
-          } else {
-            lenderData[creatorName] = <String, dynamic>{
-              'totalAmount': amountOwed,
-              'userImagePath': creatorUser?.userImagePath,
-              'loans': <Map<String, dynamic>>[
-                <String, dynamic>{
-                  'receivableId': receivable.receivableId,
-                  'description': receivable.description,
-                  'amount': amountOwed,
-                  'method': receivable.method,
-                  'createdAt': receivable.createdAt ?? DateTime.now(),
-                  'isPaid': paid,
-                  'isReceived': received,
-                },
-              ],
-            };
-          }
+        final entry = lenderData.putIfAbsent(lenderId, () {
+          return <String, dynamic>{
+            'lenderName': lenderName,
+            'userImagePath': creatorUser?.userImagePath,
+            'loans': <Map<String, dynamic>>[],
+            'outstandingAmount': 0.0,
+            'settledAmount': 0.0,
+          };
+        });
+
+        (entry['loans'] as List<Map<String, dynamic>>).add(<String, dynamic>{
+          'receivableId': receivable.receivableId,
+          'description': receivable.description,
+          'amount': amountOwed,
+          'method': receivable.method,
+          'createdAt': receivable.createdAt ?? DateTime.now(),
+          'isPaid': paid,
+          'isReceived': received,
+          'settled': settled,
+          'lenderId': lenderId,
+          'lenderName': lenderName,
+        });
+
+        if (settled) {
+          entry['settledAmount'] =
+              (entry['settledAmount'] as double) + amountOwed;
+        } else {
+          entry['outstandingAmount'] =
+              (entry['outstandingAmount'] as double) + amountOwed;
         }
       }
 
@@ -194,53 +228,244 @@ class _LoanScreenState extends State<LoanScreen> {
     }
   }
 
+  Widget _summaryHeader({required double totalAmount, required int count}) {
+    final colors = [
+      Theme.of(context).colorScheme.primary.withOpacity(0.85),
+      Theme.of(context).colorScheme.secondary.withOpacity(0.65),
+    ];
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: colors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TitleText(
+                  title: "Loans",
+                  color: Colors.white,
+                  fontSize: 18,
+                ),
+                const SizedBox(height: 6),
+                SubtitleText(
+                  title: "Outstanding to $count lenders",
+                  color: Colors.white70,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                TitleText(
+                  title: "Rs ${totalAmount.toStringAsFixed(0)}",
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.update, size: 14, color: Colors.white),
+                      const SizedBox(width: 6),
+                      SubtitleText(
+                        title: "Pull to refresh",
+                        fontSize: 11,
+                        color: Colors.white,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _filters() {
+    final filters = {
+      'all': 'All',
+      'outstanding': 'Outstanding',
+      'settled': 'Settled',
+    };
+    return Wrap(
+      spacing: 8,
+      children: filters.entries.map((entry) {
+        final selected = _filter == entry.key;
+        return ChoiceChip(
+          label: Text(entry.value),
+          selected: selected,
+          onSelected: (_) {
+            setState(() {
+              _filter = entry.key;
+            });
+          },
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _searchBar() {
+    return TextField(
+      decoration: InputDecoration(
+        hintText: "Search by lender",
+        prefixIcon: const Icon(Icons.search),
+        filled: true,
+        fillColor: Colors.grey[900],
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+      ),
+      onChanged: (val) => setState(() {
+        _searchQuery = val;
+      }),
+    );
+  }
+
   Widget customListTile(
     Size size,
     String lenderName,
     double totalAmount,
     List<Map<String, dynamic>> loans,
-    String userImagePath,
-  ) {
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color.fromARGB(82, 71, 71, 71),
-        border: Border.all(width: 0.5, color: Colors.grey[300]!),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ListTile(
-        dense: true,
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) =>
-                  LoanDetailScreen(loans: loans, lenderName: lenderName),
-            ),
-          );
-        },
-        leading: SizedBox(
-          height: size.height * 0.1,
-          width: size.width * 0.1,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(50),
-            child: userImagePath.isNotEmpty
-                ? Image.network(
-                    userImagePath,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Image.asset(
-                        AssetsManager.emptySearch,
-                        fit: BoxFit.cover,
-                      );
-                    },
-                  )
-                : Image.asset(AssetsManager.emptySearch, fit: BoxFit.cover),
+    String userImagePath, {
+    double settledAmount = 0,
+  }) {
+    final settled = totalAmount <= 0 && settledAmount > 0;
+    final statusColor = settled ? Colors.green : Colors.orangeAccent;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                LoanDetailScreen(loans: loans, lenderName: lenderName),
           ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.grey[900],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[800]!),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
-        title: TitleText(title: lenderName),
-        subtitle: SubtitleText(title: "Rs: ${totalAmount.roundToDouble()}"),
-        trailing: Icon(Icons.arrow_forward_ios_rounded),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 24,
+              backgroundColor: Colors.grey[800],
+              backgroundImage:
+                  userImagePath.isNotEmpty ? NetworkImage(userImagePath) : null,
+              child: userImagePath.isEmpty
+                  ? Text(lenderName.isNotEmpty ? lenderName[0].toUpperCase() : '?')
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TitleText(title: lenderName, fontSize: 16),
+                  const SizedBox(height: 4),
+                  SubtitleText(
+                    title: "${loans.length} records",
+                    fontSize: 12,
+                    color: Colors.grey[400],
+                  ),
+                  if (settledAmount > 0)
+                    SubtitleText(
+                      title: "Settled: Rs ${settledAmount.toStringAsFixed(0)}",
+                      fontSize: 12,
+                      color: Colors.grey[400],
+                    ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                TitleText(
+                  title: "Rs ${totalAmount.toStringAsFixed(0)}",
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: statusColor.withOpacity(0.4)),
+                  ),
+                  child: SubtitleText(
+                    title: settled ? "Settled" : "Pending",
+                    fontSize: 11,
+                    color: statusColor,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _filterEmptyState() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.filter_alt_off, size: 48, color: Colors.grey),
+          const SizedBox(height: 8),
+          TitleText(title: "No items for this filter"),
+          const SizedBox(height: 6),
+          SubtitleText(
+            title: "Try switching filters or refreshing.",
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 12),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _filter = 'all';
+              });
+            },
+            child: const Text("Show All"),
+          ),
+        ],
       ),
     );
   }

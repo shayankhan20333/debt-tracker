@@ -6,6 +6,7 @@ import 'package:depth_tracker/constant/validator.dart';
 import 'package:depth_tracker/model/user_model.dart';
 import 'package:depth_tracker/root_screen.dart';
 import 'package:depth_tracker/screens/loading_manager.dart';
+import 'package:depth_tracker/widgets/my_app_Bar.dart';
 import 'package:depth_tracker/services/user_services.dart';
 import 'package:depth_tracker/widgets/subtitle_text.dart';
 import 'package:depth_tracker/widgets/title_text.dart';
@@ -17,7 +18,6 @@ import 'package:flutter_iconly/flutter_iconly.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:isar/isar.dart';
-import 'package:shimmer/shimmer.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -234,20 +234,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
         FocusScope.of(context).unfocus();
       },
       child: Scaffold(
-        appBar: AppBar(
-          toolbarHeight: size.height * 0.15,
-          title: Shimmer.fromColors(
-            period: Duration(seconds: 12),
-            baseColor: Colors.purple,
-            highlightColor: Colors.red,
-            child: TitleText(
-              title: "Debt Tracker",
-              fontSize: 30,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          centerTitle: true,
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        appBar: const MyAppBar(
+          title: "Register",
+          hasTitleInCenter: true,
         ),
         body: LoadingManager(
           isLoading: isLoading,
